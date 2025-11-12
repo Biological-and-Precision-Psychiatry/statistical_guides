@@ -1,0 +1,291 @@
+---
+title: "Kaplan-Meier as an IPCW Estimator of the eCDF"
+author: "Rune H B Christensen"
+date: "24 June 2025, last edit: 22 October 2025"
+output:
+  pdf_document:
+    toc: true
+  html_document:
+    toc: true
+editor_options:
+  chunk_output_type: console
+---
+
+
+```{r, message=FALSE, echo=FALSE}
+library(ggplot2)
+library(data.table)
+# library(readxl)
+# library(emmeans)
+# library(arsenal) # for 'tableby'
+# library(geepack) # for robust standard errors
+library(survival)
+# library(survminer)
+# 
+# library(parallel)
+# library(foreach)
+```
+
+```{r setup, echo=FALSE}
+# Set root dir to project root: 
+knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
+```
+
+## Introduction
+
+```{r, echo=FALSE}
+# Parameters:
+n <- 101
+lambda_death <- 1.5
+lambda_cens <- .5
+# Simulate and setup data:
+set.seed(123)
+d0 <- data.table(death = rexp(n=n, rate=lambda_death), 
+                cens = rexp(n=n, rate=lambda_cens))
+d0[, `:=`(time = pmin(death, cens),
+         Y = c("death", "cens")[apply(cbind(death, cens), 1, which.min)])]
+setorder(d0, time)
+```
+
+The unique challenge of survival analysis is obtaining inference for a population based on only partially observed data. Consider for example the survival time, or equivalently the time to death, from a particular initiating event, say, heart transplant. If the death times of all subjects in the population are observed we can summarize the data by the empirical cumulative distribution function (eCDF) of death times providing a non-parametric esimate of the probability of death as a function of time.
+
+Rarely are all death times observed, instead some death times are _censored_ because subjects are lost to follow-up or the study period ends while some subjects are still alive. These subjects' death times are known only to exceed the study period and are therefore censored.
+
+A key assumption throughout all survival analyses with very rare exceptions is that the censoring process is _uninformative_ (also denoted _independent_ or _random_), i.e., that the probability of being censored is unrelated to the risk of dying. If, for instance, healthy subjects are more likely to be lost to follow-up because they tend to emigrate more often, the assumption of non-informative censoring is not fulfilled. 
+
+An often used survival method is the Kaplan-Meier (or _product-limit_) estimator which is an estimator of the eCDF when some death times are censored. Figure 1 illustrates for a simulated sample dataset the eCDF (dashed blue line) that we could have obtained if all death times were observed. Also shown is the Kaplan-Meier estimator in the more realistic situation when some subjects are censored. The right part of Figure 1 shows the eCDF and Kaplan-Meier curves for the censoring process which rarely receives much attentions in practice. 
+
+
+```{r, echo=FALSE, fig.cap="Empirical cumulative distribution function (eCDF) and Kaplan-Meier estimator of death and censoring for a simulated artificial example.", fig.height=4, fig.width=7}
+d <- copy(d0)
+d[, r:=.N-0:(.N-1)]
+d[, KM_death := 1- cumprod(1-(Y=="death")/r)]
+d[, KM_cens := 1- cumprod(1-(Y=="cens")/r)]
+
+d2 <- melt(d, id.vars = "time", measure.vars = c("KM_death", "KM_cens"))
+d2[, outcome := gsub("KM_", "", variable)]
+d2[outcome == "cens", outcome := "censoring"]
+d2[, variable := "Kaplan-Meier"]
+d2[, outcome := factor(outcome, levels=c("death", "censoring"))]
+
+ecdf_death <- copy(d0)
+setorder(ecdf_death, death)
+ecdf_death[, `:=`(value = 1:.N / .N, 
+                  outcome = factor("death"),
+                  variable = "eCDF",
+                  time = death)]
+
+ecdf_cens <- copy(d0)
+setorder(ecdf_cens, cens)
+ecdf_cens[, `:=`(value = 1:.N / .N, 
+                  outcome = factor("censoring"),
+                  variable = "eCDF",
+                  time = cens)]
+
+plotdata <- rbind(d2, ecdf_death[, .(time, value, outcome, variable)],
+                  ecdf_cens[, .(time, value, outcome, variable)])
+plotdata <- rbind(plotdata[, .(time = 0, value=0), .(variable, outcome)],
+                  plotdata)
+setorder(plotdata, variable, outcome, time)
+
+# dev.new()
+ggplot(plotdata[time < 2], aes(time, value, color=variable, linetype=variable)) + 
+  geom_step() + 
+  theme_bw() + theme(legend.position = "top") + 
+  facet_wrap(~ outcome) + 
+  # facet_wrap( ~ factor(outcome, labels=c("death", "censoring"))) + 
+  scale_x_continuous("Time", limits=c(0, 2)) + 
+  scale_y_continuous("Cumulative Distribution Function", limits=0:1) + 
+  labs(color="", linetype="")
+```
+
+In this note we consider an inverse probability of censoring weighted (IPCW) estimator which directly adjusts the eCDF estimator for censoring by weighting. The weights are intuitively speaking the inverse of the probability of remaining uncensored and are based on the Kaplan-Meier estimator of the censoring process.
+
+The IPCW estimator essentially trades of the Kaplan-Meier estimator of death for the Kaplan-Meier estimator of censoring which may not seem particularly useful. However, in addition to providing insights into the relations between eCDF, Kaplan-Meier and IPCW estimators, it also provides the foundation for adjusting survival analyses for _dependent_ censoring. The prospect is that we can model the risk of censoring while adjusting it for prognostic factors of censoring such good health in the case of emigration thereby extending survival analyses into situations where the assumption of independent censoring is untenable. 
+
+In this note we describe eCDF, Kaplan-Meier and IPCW estimators in continuous and discrete time. While [Satton and Datta (2001)](https://doi.org/10.1198/000313001317098185) provided mathematical proofs of the equivalence of Kaplan-Meier and IPCW estimators, we emphasize the computation of the estimators and provide small examples in **R**.
+
+
+## Continuous time
+
+After presenting the notation, this section presents the eCDF, the Kaplan-Meier estimator and an IPCW estimator. We conclude with a small example in **R** to illustrate implementation and the numerical equivalence of the Kaplan-Meier and IPCW estimators. The generalization to discrete time (including tied event times) is presented in a later section. 
+
+### Notation
+
+- Consider subjects $i=1, \ldots, N$ 
+- Let $T^*_i$ be the possibly unobserved time of death,
+- Let $C^*_i$ be the possibly unobserved time of censoring. 
+- Define the observed time $T_i = \min(T^*_i, C^*_i)$ and 
+- Observed event $Y_i = I(T^*_i \leq C^*_i)$ (death: $Y_i = 1$ or censoring: $Y_i=0$)
+- Observed data consist of pairs $(Y_i, T_i)$ for each of the $N$ subjects.
+- Variables with an asterisk such as $T^*_i$ and $C^*_i$ are partially observed latent variables. We cannot observe both in full.
+- Upper case denotes random variables and lower case observed data.
+- Let "event" denote either death or censoring.
+
+Further,
+
+- Define the _ordered_ event times $\tau_i$,
+- and assume that all event times are unique. This simplifies the exposition but is not necessary. The _discrete time_ exposition allows for any number of either event at each time point.
+<!-- ; also see the section "Comments on time-scales". -->
+
+### The eCDF
+
+The eCDF $F_e(t)$ is a step function with jumps at the death times (we use an $e$ subscript to denote an _empirical_ function). If $T^*_i$ are fully observed, ie., if there is no censoring, the eCDF can be expressed as
+$$F^*_e(t) = P_e[T_i^* \leq t] =  \frac{1}{N} \sum_{i=1}^N I(t^*_i \leq t) $$
+
+As a function of the ordered death times it can be expressed simply as:
+$$F^*(t) = \frac{1}{N} \sum_{i:\tau^*_i \leq t} 1 $$
+where the summation is over "the $i$ such that $\tau_i^*$ is less than or equal to $t$". This is just a convenient way to express the summation over the _ordered_ death times.
+
+If death times are only partially observed due to censoring we have to use other approaches to estimate the probability of death by time $t$, $P[T_i^* \leq t]$ because not all $T_i^*$ are observable. One such approach is the Kaplan-Meier (KM) estimator. 
+
+### Kaplan-Meier estimator
+
+The KM estimator is
+$$\hat F_{km}(t) = \hat P[T^* \leq t_j]  =  1 - \prod_{i:\tau_i \leq t} \left(1 - \frac{y_i}{r(\tau_i)} \right) $$
+where $y_i = 1$ if the $i$'th subject died at time $\tau_i$ and $y_i = 0$ if the subject were censored. The $i$'th term in the product is therefore 1 if the subject was censored and consequently $\hat F_{km}(t)$ only jumps at death times.
+
+The _risk set_ $r(t)$ is the number of subjects at risk of dying just prior to time $t$ and given by
+$$r(t) = N - \sum_{i=1}^N I(\tau_i < t) = N - \sum_{i:\tau_i <t} 1$$
+thus $r(\tau_i)$ is the number of subjects who are yet to experience an event. Note that the summation is over $i:\tau_i <t$, not $\tau_i \leq t$.
+
+Analogous to the KM estimator of death (or survival) we defined the KM estimator of remaining uncensored by time $t$ as
+$$\hat K_{km}(t) = \hat P[C_i^* > t] = 1 - \hat P[C_i^* \leq t] = \prod_{i:\tau_i \leq t} \left(1 - \frac{1 - y_i}{r(\tau_i)} \right) $$
+which will have jumps at censoring times.
+
+
+### An IPCW estimator
+
+An IPCW estimator of the eCDF can be thought of as simply taking the eCDF estimator for the  latent (but only partially observed) death times and applying it to the observed death times. To adjust for the obvious bias resulting from censoring, the observed death times are weighted by the inverse probability of remaining uncensored. The estimator has the form
+$$F_{ipcw}(t) = \frac{1}{N}\sum_{i:\tau_i \leq t} \frac{y_i}{P[C_i^* \geq t]} $$
+where $P[C_i^* \geq t]$ is the probability of remaining uncensored up to (but not including) time $t$.
+
+Defining $\hat K_{km}(t-) \equiv \hat P[C_i^* \geq t]$ where $t-$ is a time just prior to $t$, an estimator of the IPCW estimator is:
+$$\hat F_{ipcw}(t) = \frac{1}{N}\sum_{i:\tau_i \leq t} \frac{y_i}{\hat K_{km}(t-)} $$
+
+At death times where $y_i = 1$ the censoring function $\hat K_{km}(t)$ is constant because we assume that all event times are unique and therefore that there are no ties. This allows us to use $\hat K_{km}(t)$ directly in place of $\hat K_{km}(t-)$.
+
+### Examples in **R**
+
+This section illustrates how to compute the estimators described above in **R**.
+
+```{r, include=FALSE}
+d <- copy(d0)
+d <- d0[c(1:4, 10:13), .(time, y=Y)]
+d[]
+```
+
+Consider the following dataset with variables $(t_i, y_i)$ ordered by increasing time for $N=8$ subjects:
+```{r, echo=FALSE}
+d[]
+```
+
+The risk set is
+```{r}
+d[, r := .N - 0:(.N-1)]
+```
+
+The Kaplan-Meier estimator of death $\hat F_{km}(t)$ is
+```{r}
+d[, F_km := 1 - cumprod(1 - (y=="death") / r)]
+```
+
+The Kaplan-Meier estimator of remaining uncensored $\hat K_{km}(t)$ is
+```{r}
+d[, K_km := cumprod(1 - (y=="cens") / r)]
+```
+
+The IPCW estimator of death $\hat F_{ipcw}(t)$ is
+```{r}
+d[, F_ipcw := (1/.N) * cumsum((y == "death") / K_km)]
+```
+
+The resulting dataset is:
+```{r}
+d[]
+```
+
+Note the exact agreement between the $\hat F_{ipcw}(t)$ and $\hat F_{km}(t)$.
+
+## Discrete time
+
+Continuous time is an ideal although mathematical convenient construct. In practice, event times are always recorded with finite precision and leading for instance to tied event times. And sometimes it is even convenient for modelling purposes to further discretize the time scale, for example, by working on intervals of weeks or months even if events are recorded on days. This sections follows the same structure as the previous section on continuous time.
+
+### Notation
+
+Suppose the observable time scale consists of time intervals $(t_{j-1}, t_j]$ where $t_0 = 0$ with constant time span $\delta = t_j - t_{j-1}$ for $j = 1, \ldots, J$.
+
+The observed data therefore consists of the number of deaths occurring in the $j$'th interval $d_j = \sum_{i=1}^N I(y_i = 1) I(t_{j-1} < t_i \leq t_j)$ and the number of subjects censored in the $j$'th interval $c_j = \sum_{i=1}^N I(y_i = 0) I(t_{j-1} < t_i \leq t_j)$.
+
+Any interval may contain any number of deaths or censorings including positive numbers of both types of events or no events of either type.
+
+If a subject's latent death and censoring times both occur within an interval the notation implies that it is the smaller of those times that determine which event is observed. This may not be an accurate representation of the data generating mechanism in all situations. 
+
+
+### KM as IPCW estimator
+
+If there are no censorings, the eCDF, can be estimated directly as all $T^*_i = T_i$ are observed:
+$$F_e^*(t_j) = P_e[T^* \leq t_j] = \frac{1}{N}\sum_{k=1}^j d_k^* $$
+
+In the presence of censorings the Kaplan-Meier (KM) estimator of the eCDF can be used:
+$$\hat F_{km} (t_j) =  \hat P_{km}[T_i^* \leq t_j] = 1 - \prod_{k=1}^j \left(1 - \frac{d_j}{r_j} \right) $$
+where 
+$$r_j = N - \sum_{k=0}^{j-1} (d_k + c_k) \quad \mathrm{where} \quad c_0 = d_0 = 0$$
+is the _risk set_, ie., the number of subjects at risk of death at the start of interval $j$. Note that the summation goes to $j-1$, not $j$.
+
+The KM estimator is a product of terms $[1 - \hat h_d (t_j)]$ where the discrete hazard of death is the probability of dying before time $t_j$ conditional on being alive at $t_{j-1}$ estimated by the number of deaths in interval $j$ relative to the number of subjects at risk of dying at the start of the interval:
+$$\hat h_d (t_j) = P[T^*_i < t_j | T_i^* \geq t_{j-1}] = \frac{d_j}{r_j} $$
+
+A discrete hazard of censoring may be defined as
+$$\hat h_c (t_j) = P[C^*_i < t_j | C_i^* \geq t_{j-1}] = \frac{c_j}{r_j - d_j} $$
+being the risk of censoring in interval $j$ relative to the number of subjects in the risk set who did not die in the $j$'th interval. 
+
+Note the difference of the two discrete hazard estimators giving preference to deaths over censoring. This essentially assumes that a subject with both $T^*_i$ and $C_i^*$ in the same interval is recorded as dead irrespective of whether $T^*_i$ or $C_i^*$ is smaller. 
+This may be reasonable if, for example, death is recorded as the outcome in a particular interval even if it was decided to withdraw, and therefore censor, a subject from study ealier in the same time interval. It may also be reasonable if censorings are few or the intervals are narrow even if it is not an accurate representation of the data generating mechanism. It may also not be appropriate in some situations. 
+
+The chance of remaining uncensored through the $j$'th interval can be expressed as the following KM-type estimator of censoring
+$$\hat K_{km}(t_j) =\hat P_{km}[C^*_i > t_j] = \prod_{k=1}^j \left(1 - \frac{c_j}{r_j - d_j} \right) $$
+
+As in the continuous case, an IPCW estimator of the eCDF can be thought of as simply taking the eCDF estimator for the latent (but only partially observed) death times and applying it to the observed death times. To adjust for the obvious bias resulting from censoring, the observed death times are weighted by the inverse probability of censoring. The estimator has the form
+$$F_{ipcw}(t_j) = \frac{1}{N}\sum_{k=1}^j \frac{d_k}{P[C_i^* \geq t_k]} $$
+where $P[C_i^* \geq t_k]$ is the probability of remaining uncensored until the $k$'th interval.
+
+Because the chance of being censored _after_ a particular interval (for example after the $(j-1)$'th interval) is the same as the chance of being censored _during or after_ the next interval (the $j$'th interval), we have that
+$$P[C_i^* > t_{j-1}] = P[C^*_i \geq t_j]$$
+and we can therefore estimate the probability of remaining uncensored as
+$$\hat P_{km}[C^*_i \geq t_j] = \hat K_{km}(t_{j-1}) $$
+Plugging into the IPCW estimator we obtain
+$$\hat F_{ipcw}(t_j) = \frac{1}{N}\sum_{k=1}^j \frac{d_k}{\hat K_{km}(t_{k-1})}, \quad \hat K_{km}(t_{0}) = 1$$
+
+### Examples in R
+
+```{r, include=FALSE}
+d <- d0[, .(time, y=Y)]
+tol <- 0.1
+bins <- d[, seq(0, max(time)+tol, by=tol)]
+d[, bintime := cut(time, breaks=bins, labels=bins[-1])]
+d <- dcast(d, bintime ~ y, fun.aggregate = length)[1:8]
+```
+
+Consider the following small dataset with counts of censorings and deaths for `r d[, sum(death + cens)]` individuals of which `r d[, sum(death)]` died:
+```{r, echo=FALSE}
+d[]
+```
+Here `bintime` is the end of the $j$'th interval ($t_j$) for $j=1,\ldots, 8$
+
+The following code computes for each interval the number of events `n`, $r_j$, $\hat F_{km}(t_j)$, $\hat K_{km}(t_{j-1})$, and $\hat F_{ipcw}(t_j)$:
+```{r}
+d[, n      := death + cens]
+d[, r      := sum(n) - c(0, cumsum(n)[-.N])]
+d[, F_km   := 1 - cumprod(1 - death/r)]
+d[, K_km   := c(1, cumprod(1 - cens/(r-death))[-.N])]
+d[, F_ipcw := (1/sum(n)) * cumsum(death / K_km)]
+d[]
+```
+
+Note again the exact agreement between $\hat F_{ipcw}(t)$ and $\hat F_{km}(t)$.
+
+
+
+
+
