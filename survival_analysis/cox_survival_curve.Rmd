@@ -1,0 +1,528 @@
+---
+title: "Survival Estimation with Proportional Hazards Models"
+author: "Rune H B Christensen"
+date: "26 October 2025"
+output:
+  pdf_document:
+    toc: true
+  html_document:
+    toc: true
+editor_options:
+  chunk_output_type: console
+---
+
+
+```{r, message=FALSE, echo=FALSE}
+library(ggplot2)
+library(data.table)
+library(readxl)
+# library(emmeans)
+# library(arsenal) # for 'tableby'
+# library(geepack) # for robust standard errors
+library(survival)
+library(ggfortify) # fortify.survfit
+# library(survminer)
+# 
+# library(parallel)
+# library(foreach)
+```
+
+```{r setup, echo=FALSE}
+# Set root dir to project root: 
+knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
+```
+
+## Introduction
+
+Proportional hazard models are conventionally used to estimate hazard ratios, but they can also be a route to estimation of survival curves. This note is a primer on survival estimation with proportional hazard models using the **survival** package in **R**.
+
+In the Cox proportional hazard model the baseline hazard is neither specified nor estimated resulting in a fully relative model fit. Estimated model coefficients describe how the hazard changes multiplicatively between covariate settings relative to a baseline hazard. The survival probabilities of a survival curve are absolute and therefore require the estimation of a baseline hazard. This note describes how this extra step is carried out and how the functions `basehaz`, `predict`, and `survfit` from the **survival** package can facilitate the estimation of hazards and survival curves.
+
+A sometimes confusing aspect is that the implementation in the **survival** package is based on approximately centering the covariates. For example `help(predict.coxph)` says that "The `coxph` routines try to approximately center the predictors out of self protection." This is because there is a risk of numerical overflow when computing `exp(x)` when `x` is large. The functions `basehaz`, `predict`, and `survfit` all inherit the centered covariates and by default return results for the transformed covariates. 
+
+This note describes when and how the numerical challenges occur, how the Cox methods in the **survival** package deal with it and how the user will have to manoeuvre the options of the software to compute the quantities of interest.
+
+Illustrations in **R** use the **data.table** package for data handling and manipulation. Readers unfamiliar with the **data.table** package will hopefully (and probably) find the code easy to read.
+
+The goal is to link theory to practice and show how certain survival analysis quantities are computed and how they are obtained using the **survival** package. The hope is that the reader will see a close resemblance between mathematical equations and the illustrated **R** code.
+
+The first section outline the theory and notation for proportional hazards models and the associated survival curve estimation. After introduction of a very simple dataset with data on only 8 subjects and two covariates follows sections on (1) baseline hazard estimation using the `basehaz` function (2) predictions using `predict` and (3) survival curve estimation using `survfit`. In (1) we consider the topics of numerical overflow and choice of reference point for baseline hazard estimation. We end with a brief section on the estimation of marginal survival curves.
+
+
+## Preliminary theory
+
+The Proportional hazards model is
+$$h(t; x_i) = h_0(t)\exp(\eta_i), ~ \mathrm{where}~ \eta = X \beta $$
+Here $\beta$ is a vector of model coefficients, $X$ is a matrix of covariates, $\eta$ is the linear predictor, $h_0(t)$ is the _baseline hazard_ and $h(t, x_i)$ is the hazard function for the $i$'th covariate vector.
+
+Often analyses stop here and inference is based on the hazard ratios provided by the estimated coefficients $\hat\beta$. If interest is in survival or risk curves, however, we need the following considerations. 
+
+The cumulative (or _integrated_) hazard is defined as
+$$H(t) = \int_0^t h(u) \,\mathrm{d}u$$
+which is directly related to the survival function by
+$$S(t) = P(T > t) = \exp[-H(t)]$$
+
+The proportional hazards model implies that the cumulative hazard may be written
+$$H(t; x_i) = H_0(t)\exp(\eta_i)$$
+where $H_0(t)$ is the _baseline cumulative hazard_. The associated survival function is
+$$S(t; x_i) = \exp[-H_0(t)\exp(\eta_i)] = S_0(t)^{\exp(\eta_i)}\quad \mathrm{where}\quad S_0(t) = \exp[-H_0(t)] $$
+or equivalently
+$$\log S(t; x_i) = \exp(\eta_i) \log S_0(t) = -H_0(t) \exp(\eta_i) $$
+
+Based on an estimate of the baseline cumulative hazard it is therefore possible to compute the survival function for an individual with any covariate setting using the estimated parameters from the proportional hazards model:
+$$\log \hat S(t; x_i) = -\hat H_0(t) \exp(x_i^\top \hat\beta) $$
+
+Fitting the Cox proportional hazards model provides the parameter estimates $\hat\beta$, but the baseline cumulative hazard function $H_0(t)$ requires an extra step.
+
+An often cited estimator of the cumulative hazard is the Breslow estimator:
+$$\hat H(t) = \sum_{i:t_i \leq t} \frac{d_i}{\sum_{i:t_i \geq t} \exp(x_i^\top \hat{\beta})}$$
+but there are other options when there are tied event times in the data. 
+
+
+## Example data
+
+Consider the following time-to-event data on 8 subjects with the covariates sex and age adopted from this [blog post](https://missingdatasolutions.rbind.io/2022/12/cox-baseline-hazard/):
+```{r}
+dt <- data.table(time = c(1,3,5,6,2,7,9,11),
+                 status = c(1,0,1,1,1,0,1,1),
+                 sex = c(1,1,1,1,0,0,0,0),
+                 age = c(57, 52, 48, 42, 39, 31, 26, 22))
+setorder(dt, time)
+dt
+```
+
+A Cox proportional hazards model fit to these data provide the estimated model coefficients $\hat\beta$, but no estimate of the baseline hazard function:
+```{r}
+fm <- coxph(Surv(time, status) ~ age + sex, data=dt)
+summary(fm)
+```
+
+
+## The baseline hazard
+
+To estimate the baseline hazard function, we can conveniently use the `basehaz` function:
+```{r}
+basehaz(fm)
+```
+The `hazard` column in the returned `data.frame` is confusingly, however, not the baseline hazard function, $h_0(t)$ that one might expect for two main reasons:
+
+1. What is denoted `hazard` is in fact a _cumulative_ hazard function, $H(t)$
+2. The provided cumulative hazard is not a _baseline_ cumulative hazard in the sense that it is an estimate of $\hat H_0(t)$ in the equation $\log \hat S(t; x_i) = -\hat H_0(t) \exp(x_i^\top \hat\beta)$. 
+
+What is, by default, returned by `basehaz` is instead the cumulative hazard for an approximately mean centered set of covariates: $H(t; \bar x) = H_0(t) \exp(\bar x^\top \hat\beta)$, where $\bar x$ is a vector of approximately mean centered covariates.
+
+The means of the covariates are stored in the model object so we can see what they are:
+```{r}
+fm$means
+```
+
+Two questions arise from this: 
+
+1. How can we obtain an estimate of $H_0(t)$, and
+2. Why is the user interface so convoluted - it seems to almost resist the computation of $H_0(t)$
+
+It appears that the answer to the second question has two parts: First, there is a risk that the exponential function will _overflow_ leading to a loss of precision, and second, it appears that we don't actually need to compute $H_0(t)$.
+
+The following two sections will explore these two reasons.
+
+Now, however, we consider how to estimate $H_0(t)$; we simply specify `centered = FALSE` in `basehaz`:
+```{r}
+basehaz(fm, centered = FALSE)
+```
+
+
+### Numerical overflow
+
+Numerical overflow occurs because there is a limit to how large numbers it is possible to accurately compute the power of.
+For instance, on my computer (it may vary from one model to another), the largest whole number that I can take the exponential of without hitting infinity is 709:
+```{r}
+c(exp(709), exp(710)) # 8.218407e+307           Inf
+```
+
+The limit is stored in `.Machine$double.max.exp` and described as "the smallest positive power of `double.base` that overflows. Normally `1024`." (see `help(.Machine)`). Additionally `double.base` (see `.Machine$double.base`) is usually `2`. Therefore we should be able to compute $2^{1023}$ but not $2^{1024}$:
+```{r}
+c(2^1023, 2^1024) # 8.988466e+307           Inf
+```
+
+The inaccuracies appear with much lower exponents because the computer can only hold around 16 digits in double precision. Therefore numbers greater than around $10^{16}$ will have zero correct decimals.
+
+Because $2^x = 10^{\log_{10}(2^x)}$, we can compute the exponent to base 10, ie., the $y$ such that $2^x = 10^y$ as $y = \log_{10}(2^x) = x \log_{10}(2)$. Equivalently we can compute the $z$ such that $2^x = e^z$ by using the natural logarithm instead of the logarithm with base 10.
+
+Now consider for example $x=100$, then the exponents are:
+```{r}
+x <- 100
+y <- log10(2) * x
+z <- log(2) * x
+c(x=x, y=y, z=z)
+```
+Because $2^{100} \approx 10^{30}$ the error in the computational representation of the numbers will be around $10^{15}$. This shows up if we take the difference between the numbers $2^x$, $10^y$, and $e^z$. These numbers are identical, but because the computer only has around 16 digits to work with, the numbers are represented with error:
+```{r}
+c(Diff_xy = 2^x - 10^y, Diff_xz = 2^x - exp(z))
+```
+
+
+When interest is in computing a survival curve using $\log \hat S(t; x_i) = -\hat H_0(t) \exp(x_i^\top \hat\beta)$ directly, it involves computing $\hat H_0(t)$ and $\exp(x_i^\top \hat\beta)$ and multiplying them. If, however, one is large and the other is small, the large one will risk overflowing leading to a loss of precision. This situation happens when the values of $x$ are far from zero. A much better situation is when extreme values of these two quantities are avoided. This can be achieved by centering the covariates appropriately as we shall explore in the next section.
+
+
+### The reference point is arbitrary
+
+Let 
+$$H_0(t; x_i) = H_0(t) \exp(x_i^\top\beta)$$
+denote the cumulative hazard function using zero as a reference point. Then choose $y_i = x_i - z$ for a new reference point $z$ so we may write the cumulative hazard function as
+$$H_z(t; x_i) = H_0(t; y_i) = H_0(t) \exp[(x_i - z)^\top \beta]$$
+The relation between the cumulative hazards with different points of reference therefore amounts to a single multiplicative scaling factor:
+$$H_0(t; x_i) = H_z(t; x_i) \exp(z^\top\beta)$$
+For our model fit the scaling factor is
+```{r}
+(scale_factor <- c(exp(fm$means %*% coef(fm))))
+```
+and the cumulative hazard using zero as reference point is: 
+```{r}
+cbind(basehaz(fm, centered = FALSE)$hazard,
+      basehaz(fm, centered = TRUE)$hazard / scale_factor) |> head(3)
+```
+
+Importantly the change of reference point has no influence on the estimated parameters; mean-centering `age` gives the same coefficient, standard error and $p$-value for `age` in the Cox model:
+```{r}
+dt[, c_age := age - mean(age)]
+coxph(Surv(time, status) ~ c_age + sex, data=dt) |> summary() |>
+  coef() |> round(digits=3)
+```
+Recall that $\exp(\beta_{age})$ is the multiplicative change in the hazard rate with a one-unit increase in `age`. That change is the same whether `age` is measured since birth or since some other reference $z$.
+
+
+### Nelson-Aalen and Breslow estimators
+
+A simple estimator of the cumulative hazard is the Nelson-Aalen estimator using only information on the event indicator and the risk set. There is no consideration of covariates and it is therefore model free:
+
+$$\hat H_{NA}(t) = \sum_{i:t_i \leq t} \frac{d_i}{n_i}$$
+where $d_i$ is one if $t_i$ is the time of an event and zero otherwise, and $n_i$ is number at risk.
+
+We compute the Nelson-Aalen cumulative hazard estimate for our data (assuming it is ordered by increasing observation times) as follows:
+```{r}
+dt[, n := rev(1:(.N))] # number at risk.
+dt[, cum_haz := cumsum(status / n)]
+dt[]
+```
+
+When there are no covariates (and no ties among event times) in the Cox model, the cumulative hazard estimate simplifies to that of the Nelson-Aalen:
+```{r}
+coxph(Surv(time, status) ~ 1, data=dt) |> basehaz()
+```
+
+When there are covariates in the model, the cumulative hazard estimate is that of the Breslow estimator. We can compute the Breslow estimate as follows:
+```{r}
+b <- coef(fm)
+X <- model.matrix(~ 0 + age + sex, data=dt)
+dt$eta <- c(X %*% b)
+dt[, risk := exp(eta)]
+
+dt$breslow <- sapply(dt$time, function(t) {
+  dt[time == t, status] / dt[time >= t, sum(risk)]
+}) |> cumsum()
+print(dt, digits=3)
+```
+
+A more direct but less readable implementation is:
+```{r}
+dt[, denom := rev(cumsum(rev(risk)))]
+dt[, breslow := cumsum(status / denom)]
+print(dt[, -c("sex", "age", "c_age")], digits=3)
+```
+
+All agree with the results of `basehaz`:
+```{r}
+all.equal(basehaz(fm, centered=FALSE)$hazard, dt$breslow)
+```
+
+Bear in mind that the computations above only make sense when there are no ties among the event times. If there are tied event times, there are several methods to handle that ("efron", "breslow", "exact"; see the `ties` argument of `coxph`). We will not consider ties any further in this note.
+
+
+## Predictions from the Cox model
+
+The predict method for Cox models (model objects of class `coxph`) has several options of which three are of primary importance:
+
+1. `newdata`,
+1. `type=c("lp", "risk", "expected", "terms", "survival")`, and
+1. `reference=c("strata", "sample", "zero")`
+
+If `newdata` is provided (a `data.frame` with specified value of the covariates), predictions are provided for those predictor values. 
+<!-- (_how does it play with reference settings?_).  -->
+If `newdata` is not provided predicted values are provided for the covariate values in the data used to fit the model. In the following we consider the situation in which `newdata` is not provided but give an example of its use for `type = "survival"`.
+
+As was the case with `basehaz`, the `predict` method will provide predictions relative to the _mean centered_ covariates by default, that is, when `reference = "strata"`. In fact, it will also do that when `reference = "sample"` the difference being whether mean centering is done within strata or on the whole sample. The difference is only relevant when the Cox model contains a specification of strata; otherwise they are the same. To obtain predictions for the original covariates we can specify `reference = "zero"`.
+
+A summary of the different quantities computed for the different values of the `type` argument are provided in the following list:
+
+- lp: linear predictor $\hat\eta = X\hat \beta$
+- risk: exponentiated linear predictor $\exp(\hat\eta) = \exp(X\hat \beta)$
+- expected: cumulative hazard function $H(t_i; x_i) = H_0(t_i) \exp(x_i^\top\hat\beta)$
+- survival: survival probabilities $S(t_i; x_i) = \exp[-H_0(t_i) \exp(x_i^\top\hat\beta)]$
+- terms: a matrix with the contributions to the linear predictor from each model term in separate columns
+
+
+### type = "lp"
+
+The `type` argument controls what is predicted. Here `type = "lp"` (the default) provides the linear predictor, $\eta$. 
+
+Here we compute the linear predictor, $\hat\eta = X\hat \beta$ by hand and using the predict method:
+```{r}
+X <- model.matrix(~ 0 + age + sex, data=dt)
+lp <- c(X %*% coef(fm))
+cbind(lp, 
+      predict(fm, type = "lp", reference = "zero")) |> head(3)
+```
+
+The model object also contains a `linear.predictors` object, which is the mean centered linear predictor: 
+```{r}
+cbind(fm$linear.predictors, 
+      predict(fm, type = "lp")) |> head(3)
+```
+
+The following are equivalent ways of obtaining the linear predictor for the mean centered covariates (results not shown):
+```{r, results='hide'}
+predict(fm, type = "lp", reference = "sample") # same (no strata in model)
+predict(fm, type = "lp", reference = "strata") # same (no strata in model)
+predict(fm) # same (due to default arguments)
+```
+
+
+### type = "risk"
+
+Type "risk" provides the exponentiated linear predictor $\exp(\hat\eta) = \exp(X\hat \beta)$:
+```{r}
+cbind(exp(lp), 
+      predict(fm, type = "risk", reference = "zero")) |> head(3)
+```
+
+
+### type = "expected"
+
+Type "expected" provides an estimate of the cumulative hazard function $H(t_i; x_i) = H_0(t_i) \exp(x_i^\top\hat\beta)$ for each row ($i$) of the dataset:
+```{r}
+H0 <- basehaz(fm, centered = FALSE)$hazard
+cbind(H0 * exp(lp), 
+      predict(fm, type = "expected", reference = "zero"),
+      predict(fm, type = "expected", reference = "sample")) |> head(3)
+```
+Because this is an absolute measure rather than a relative measure the reference argument is ineffective.
+
+When computing these quantities by hand we may want to avoid the `H0 * exp(lp)` construction: `H0` contain very small numbers (around $10^{-10}$) and `exp(lp)` contain rather large numbers (around $10^{10}$): A recipe for numerical problems and loss of precision. As explained in the previous section on numerical overflow a better strategy is to chose a reference closer to the mean of the linear predictor rather than zero as illustrated by the following code:
+```{r}
+basehaz(fm, centered=TRUE)$hazard * predict(fm, type = "risk", reference = "sample")
+```
+Now both terms of the product are using the sample means as a point of reference instead of zero. The computed quantity (the cumulative hazard) is exactly the same but the computation is much safer because both terms of the product are closer to unity.
+
+Note that $H(t_i; x_i)$ is the cumulative hazard for the covariates $x_i$ evaluated at the time $t_i$.
+
+
+### type = "survival"
+
+Type "survival" computes the quantities $S(t_i; x_i) = \exp[-H_0(t_i) \exp(x_i^\top\hat\beta)]$
+```{r}
+cbind(exp(-H0 * exp(lp)), 
+      predict(fm, type = "survival", reference = "sample"),
+      predict(fm, type = "survival", reference = "zero")) |> head(3)
+```
+and again the quantities are absolute rendering the `reference` argument ineffective.
+
+As was the case with the cumulative hazard, $S(t_i; x_i)$ is a quantity (here a survival probability) for the covariates $x_i$ evaluated at the time $t_i$. The vector of numbers produced by `predict` with `type = "survival"` therefore do not constitute a survival curve in itself. Rather the numbers are points on survival curves for different covariate settings evaluated at different time points.
+
+The `newdata` argument can be used to specify the covariate settings and time points of interest. If, for example, we are interested in the survival curve for the fourth subject, that is the survival probability at all observed event or censoring times, we can use:
+```{r}
+ndata <- dt[, .(time, status, age=age[4], sex=sex[4])]
+ndata$pred <- predict(fm, ndata, type="survival")
+ndata
+```
+
+A more direct route to survival curve computation is provided by the `survfit` function discussed below.
+
+
+### type = "terms"
+
+A "terms" prediction is a matrix with the contributions to the linear predictor from each model term in separate columns: 
+```{r}
+(XX <- predict(fm, type="terms"))
+```
+The attribute `"constant"` is the centering value for the linear predictor obtained as the product of the covariate means and the model coefficients:
+```{r}
+c(fm$means %*% coef(fm))
+```
+The row sums of the term predictions equal the linear predictor:
+```{r}
+cbind(rowSums(XX), 
+      predict(fm, type = "lp", reference = "sample")) |> head(3)
+```
+and if we add the attribute, "constant", then we obtain the zero-reference linear predictor:  
+```{r}
+cbind(rowSums(XX) + attr(XX, "constant"),
+      predict(fm, type = "lp", reference = "zero")) |> head(3)
+```
+
+
+## Survival curve estimation using survfit
+
+
+Calling `survfit` on our Cox model fit provides rather limited information:
+```{r}
+(sfm <- survfit(fm))
+```
+The resulting object, however, contains more information:
+```{r}
+str(sfm)
+```
+
+To prepare for plotting the survival curve, we can extract some of the relevant data:
+```{r}
+plotdata <- with(sfm, data.table(time, n.risk, n.event, cumhaz, surv))
+print(plotdata, digits=3)
+```
+Here `cumhaz` is the cumulative hazard for the mean centered covariates $H_z(t; x)$ and `surv` is $\exp[-H_z(t; x)]$. We have previously used `basehaz` to compute the cumulative hazard, and indeed the same number are produced by this function:
+```{r}
+cumhaz <- basehaz(fm, centered = TRUE)$hazard
+cbind(cumhaz, surv=exp(-cumhaz)) |> signif(3)
+```
+In fact, `basehaz` is an alias for the `survfit` function and calls that function internally with minimal post processing.
+
+The information in `plotdata` can also be extracted with the following functions (results not shown):
+```{r, results='hide'}
+summary(sfm)
+fortify(sfm) ## packages ggplot2 and ggfortify
+```
+
+Another useful function is `survfit0`. This function adds a row to the data for time zero which is useful for plotting:
+```{r}
+plotdata <- survfit0(sfm) |> fortify()
+print(plotdata, digits=3)
+```
+
+A simple plot of the survival function is
+```{r, echo=-1}
+# dev.new()
+ggplot(plotdata, aes(time, surv)) + geom_step()
+```
+
+The survival probabilities on this curve refer to a subject with values of the covariates equal to the approximately mean centered covariates, ie., with the following values of `age` and `sex`:
+```{r}
+fm$means
+```
+Whether this is a relevant subject to produce a survival curve for is context dependent. There is a risk, however, that the mean-centered values do not refer to any subject in the population, that the mean-center subject does not make sense (eg., 50% male and 50% female), or that the mean-center subject is unrepresentative of the population of interest.
+
+
+### Using the newdata argument
+
+The `newdata` argument can be used to get survival curves for particular values of the covariates. If we want to see the survival curves for each sex at an average age value, we could specify the `newdata` argument as follows:
+```{r}
+ndata <- expand.grid(age = dt[, mean(age)], 
+                     sex = dt[, unique(sex)])
+ndata
+```
+The survival probabilities are obtained as before, but since there are two rows in `ndata` two survival curves are produced. They are returned as a two-column matrix with one row for each unique time point:
+```{r}
+sfm2 <- survfit(fm, newdata = ndata) |> survfit0()
+str(sfm2, list.len = 7)
+```
+We extract, manipulate and plot the survival probabilities as follows:
+```{r}
+dsurv <- with(sfm2, cbind(data.table(n, time, n.risk, n.event),
+                          as.data.table(surv)))
+sfm2$cumhaz
+dsurv <- melt(dsurv, measure.vars = as.character(1:2),
+              variable.name = "row", value.name = "surv")
+dsurv[, sex := factor(fifelse(row == 1, 1, 0))]
+ggplot(dsurv, aes(time, surv, color=sex)) + geom_step()
+```
+
+To illustrate the variation in survival curves in the population, we might want to see the survival curves for each sex and for age values at the 25'th, 50'th and 75'th percentiles of the population values. To do this, we construct the prediction dataset (`newdata`) as follows:
+```{r}
+ndata <- expand.grid(age = dt[, quantile(age, c(0.25, .5, .75))], # dt[, mean(age)], 
+                     sex = dt[, unique(sex)]) |> as.data.table()
+ndata
+```
+We obtain the six survival curves, flip the survival curve data to long format and combine with `ndata` as follows:
+```{r}
+sfm3 <- survfit(fm, newdata = ndata) |> survfit0()
+dsurv <- with(sfm3, cbind(data.table(n, time, n.risk, n.event),
+                          as.data.table(surv)))
+dsurv <- melt(dsurv, measure.vars = as.character(1:ncol(sfm3$surv)),
+              variable.name = "row", value.name = "surv")
+ndata[, row := factor(1:(.N))]
+dsurv <- merge(dsurv, ndata, by="row", all.x=TRUE)
+dsurv[, `:=`(age = factor(age), sex = factor(sex))]
+print(dsurv, topn = 3)
+```
+and we are now ready to plot the survival curves:
+```{r, fig.width=9, fig.height=4}
+ggplot(dsurv, aes(time, surv, color=sex)) + geom_step() + 
+  facet_wrap(~age, labeller="label_both")
+```
+
+```{r misc, include=FALSE, eval=FALSE}
+sfm3$surv
+exp(-sfm3$cumhaz)
+
+sfm4 <- survfit(fm, newdata=ndata[1], time0 = TRUE, censor = FALSE) |> summary()
+sfm4$surv
+exp(-sfm4$cumhaz)
+
+## Baseline hazard:
+H0 <- basehaz(fm, centered = FALSE)$hazard
+X <- model.matrix(~ 0 + age + sex, data=ndata[1])
+Ht <- H0 * exp(c(X %*% coef(fm)))
+(St <- exp(-Ht))
+
+## All time-points:
+sfm4 <- survfit(fm, newdata=ndata, time0 = TRUE, censor = FALSE) |> summary()
+sfm4$surv
+
+X <- model.matrix(~ 0 + age + sex, data=ndata)
+Ht <- H0 %o% exp(c(X %*% coef(fm)))
+(St <- exp(-Ht))
+
+## All time-point using mean-centered computations:
+predict(fm, newdata=ndata, type="risk", reference = "sample")
+Ht <- basehaz(fm)$hazard %o% predict(fm, newdata=ndata, type="risk")
+(St <- exp(-Ht))
+ndata
+
+## Using exp(-cumhaz):
+# dev.new()
+sfm3 <- survfit(fm, newdata = ndata) |> survfit0()
+dsurv <- with(sfm3, cbind(data.table(n, time, n.risk, n.event),
+                          as.data.table(exp(-cumhaz))))
+setnames(dsurv, function(x) gsub("^V", "", x))
+dsurv <- melt(dsurv, measure.vars = as.character(1:ncol(sfm3$surv)),
+              variable.name = "row", value.name = "surv")
+ndata[, row := factor(1:(.N))]
+dsurv <- merge(dsurv, ndata, by="row", all.x=TRUE)
+dsurv[, `:=`(age = factor(age), sex = factor(sex))]
+ggplot(dsurv, aes(time, surv, color=sex)) + geom_step() + 
+  facet_wrap(~age, labeller="label_both") + geom_rug(sides="b")
+
+```
+
+
+## Marginal survival curves
+
+The survival curves obtained in the last section were _conditional_ curves; they corresponded to particular individuals with set values of the covariates sex and age. If, instead, we are interested in a survival curve representing a population-average, we need a _marginal_ survival curve.
+
+A standard Kaplan-Meier curve is a option, but that curve is unadjusted for the covariates. Another option is a survival curve for a set of covariates set to their average value similar to that produced by `survfit` when the `newdata` argument is not set. This method know as the _average covariate method_ has serious disadvantages (cf. [Nieto and Coresh, 1996](https://doi.org/10.1093/oxfordjournals.aje.a008670)) and is recommended against in numerous texts. A better option is to standardize the survival curves to the distribution of covariates in the population of interest. Usually the population of interest is taken to be the study population and we will illustrate that in the following.
+
+First we extract the survival curves for each subject in the study population (8 subjects in our case) and then average the survival probability at each time point over the population. We do that by taking the row-sums of the matrix of survival curves, `surv`. 
+```{r}
+sfm4 <- survfit(fm, newdata = dt) |> survfit0()
+dsurv <- with(sfm4, cbind(data.table(
+  n, time, n.risk, n.event, surv = rowMeans(surv), adjusted="yes")))
+```
+
+For comparison we compute the unadjusted marginal survival curve. We do that using the Nelson-Aalen estimator of the cumulative hazard function which is what we would also get if we extracted the survival curve from a Cox model with no covariates:
+```{r}
+dsurv2 <- copy(dsurv)[, `:=`(surv = exp(-cumsum(n.event / n.risk)),
+                             adjusted = "no")]
+```
+The last step is to merge the data and plot the survival curves:
+```{r}
+dsurv3 <- rbind(dsurv, dsurv2)
+ggplot(dsurv3, aes(time, surv, color=adjusted)) + geom_step()
+```
+
