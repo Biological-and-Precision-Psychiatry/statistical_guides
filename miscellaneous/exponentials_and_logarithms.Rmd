@@ -1,0 +1,212 @@
+---
+title: "Exponentials and logarithms"
+author: "Rune Haubo B Christensen"
+date: "2020-11-04 -- version 1.0-0"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+    number_sections: true
+  pdf_document:
+    toc: yes
+    toc_depth: 2
+    number_sections: true
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE, collapse = TRUE) #, fig.retina = 4)
+knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
+library(data.table)
+library(ggplot2)
+```
+
+# Exponential and logarithmic functions
+
+Suppose we are studying an infectious disease outbreak where the number of infected subjects, $y$ double each day:
+$$y = f(t) = 2^t$$
+The following table describes the number of infected subjects over the first 4 days:
+
+|$t = \log_2(y)$ | $2^t = y$|
+|------|--------|
+|$0$ | $2^0 = 1$ |
+|$1$ | $2^1 = 2$ |
+|$2$ | $2^2 = 4$ |
+|$3$ | $2^3 = 8$ |
+|$4$ | $2^4 = 16$ |
+
+At baseline, day $t=0$ there is a single infected subject and with the passing of each day the number of infected subjects doubles.
+
+Here $2^t$ is said to be an _exponential function_ with _exponent_ $t$ and _base_ $2$, and the number of infected subjects is said to _increase exponentially_.
+The reverse or _inverse function_ is written $t = \log_2(y)$ and called a _logarithmic function_ with base 2. 
+
+## Proporties of exponential and logarithmic functions
+
+A key proporty of exponential and logarithmic functions is their ability to turn multiplication into addition and back again:
+
+1. $e^a \cdot e^b = e^{a + b}$
+1. $\log(a \cdot b) = \log (a) + \log(b)$
+
+It follows that exponentiation and multiplication can also be manipulated:
+
+1. $(e^{a})^b = e^{a b}$
+1. $\log(a^b) = b \log (a)$
+
+The following figure graphs exponential and logarithmic functions with different bases $b$. Dotted straight lines have unit slope and are tangent lines to the functions using base $e$.
+
+```{r fig_exp_log, echo=FALSE, out.width='48%', fig.width=4, fig.asp=1, fig.show="hold"}
+## Exponential functions
+t <- seq(-1.2, 2.7, 0.01)
+d <- data.table(t, `2`=2^t, `e`=exp(t), `10`=10^t)
+plotdata <- melt(d, id.vars = "t", variable.name = "base b:")
+ggplot(plotdata, aes(t, value, linetype=`base b:`, color=`base b:`)) + 
+  geom_line() + scale_color_brewer(palette = "Dark2") + 
+  coord_cartesian(ylim=c(0, 12), xlim=c(-1, 2.5)) + 
+  scale_y_continuous(breaks=seq(0, 12, 2), name = expression(f(t)==b^t)) + 
+  geom_abline(intercept = 1, slope=1, color="black", linetype="dotted") + 
+  theme_bw() + 
+  theme(legend.position = "bottom")
+
+## Logarithmic functions
+y <- seq(.01, 2.7, 0.01)
+d <- data.table(y, `2`=log2(y), `e`=log(y), `10`=log10(y))
+plotdata <- melt(d, id.vars = "y", variable.name = "base b:")
+ggplot(plotdata, aes(y, value, linetype=`base b:`, color=`base b:`)) + 
+  geom_line() + scale_color_brewer(palette = "Dark2") + 
+  coord_cartesian(ylim=c(-1, 1.5), xlim=c(0, 2.5)) + 
+  geom_abline(intercept = -1, slope=1, color="black", linetype="dotted") + 
+  ylab(expression(t==log[b](y))) + theme_bw() + 
+  theme(legend.position = "bottom")
+```
+
+
+## Rate of change
+
+Exponential functions have special proporties when it comes to rates of change and derivaties.
+Considering the infectious disease example from above and suppose we are interested in the rate at which the number of infected subjects increase, that is, the derivative
+$$\frac{\mathrm{d} f}{\mathrm{d} t} (t) = \frac{\mathrm{d} 2^t}{\mathrm{d} t}$$
+
+Take for example the change from day $t=2$ where 4 subjects are infected to day $t=3$ where and additional 4 subjects are infected. Similarly, the change from day $t=3$ to day $t=4$ causes a doubling from 8 to 16 infected subjects. It would seem that the rate of change at a particular day is the same as the function value at that day, ie., $2^t$. 
+
+What we have exposed here is that the per-day increase is
+$$\frac{2^{t + 1} - 2^t}{1} = \frac{2^t2^1 - 2^t}{1} = 2^t (2 - 1) = 2^t$$
+but the rate of change, the derivative is not measured over a period of one day, but over a period $\mathrm{d} t$ that tends to zero:
+$$\frac{\mathrm{d} f}{\mathrm{d} t} (t) = \frac{f(t + \mathrm{d} t) - f(t)}{\mathrm{d} t} = \frac{2^{t + \mathrm{d} t} - 2^t}{\mathrm{d} t}, \quad \mathrm{d} t \rightarrow 0$$
+Now, we can break the exponential $2^{t + \mathrm{d} t}$ up into $2^t 2^{\mathrm{d} t}$ and write the intention to let $\mathrm d t$ approach zero a little different:
+$$\frac{\mathrm{d} f}{\mathrm{d} t} (t) = 2^t \lim_{\mathrm d t \rightarrow 0} \left(\frac{2^{\mathrm{d} t} - 1}{\mathrm{d} t} \right) = 2^t c_2$$
+and this is, in fact, quite remarkable. What it shows is that the derivative of $f(t)$ equals $f(t)$ itself times a proportionality constant $c_2$ as given by the limiting value in the equation. At this point we don't _have_ to compute this constant, but because we are curious we will, and we can just evaluate the expression for a very small value of $\mathrm{d} t$ to obtain it with good enough precision---here I use one millionth as a value for $\mathrm{d} t$ in **R**:
+```{r}
+(2^(1e-6) - 1) / 1e-6
+```
+It will later emerge what this proportionality constant really is.
+
+There were nothing special about the base 2 in our development and choosing a different base just leads to a different proportionality constant:
+$$\frac{\mathrm{d} 3^t}{\mathrm{d} t} = c_3 3^t, \quad \mathrm{where} \quad c_3 = \lim_{\mathrm d t \rightarrow 0} \left(\frac{3^{\mathrm{d} t} - 1}{\mathrm{d} t} \right)$$
+Here $c_3$ is approximately 
+```{r}
+(3^(1e-6) - 1) / 1e-6
+```
+Observing that the proportionality constant for base 2 is less than 1 while it is greater than 1 for base 3 provides a small hint as to what the constant really is.
+
+Instead of tackling the question of the proportionality constant head on, we will ask the related question of whether there is a base such that the proportionality constant is exactly 1?
+
+This would mean that the derivative of the function $b^t$ would be $b^t$ itself:
+$\mathrm{d} b^t / \mathrm{d} t = b^t$. It turns out that the value of $b$ that makes the proportionality constant equal to one and therefore solves
+$$1 = \lim_{\mathrm d t \rightarrow 0} \left(\frac{b^{\mathrm{d} t} - 1}{\mathrm{d} t} \right)$$
+is Euler's number, $b = e \approx 2.7182818$. The function which is it's own derivative is therefore 
+$$f(t) = \frac{\mathrm{d} f(t)}{\mathrm{d} t} = e^t$$
+
+The exponential and logarithmic functions with base $e$  are called the _natural_ exponential and logarithmic functions and they are graphed in the figure above. For the natural exponential function the height of the curve equals the slope of the curve and the tangent line in $(0, 1)$ (also shown in the figure) has a slope of exactly 1. For values of $x$ close to zero the natural exponential function is therefore well approximated by its tangent line at zero:
+$$e^x \approx 1 + x$$
+Taking logarithms on both sides gives another excellent approximation:
+$$\log_e(1 + x) \approx x$$
+
+As a bonus feature, note that $e^x$ is the only exponential function for which
+$$e^x \geq 1 + x \mathrm{~~~for~all~} x$$
+
+
+## A change of base
+
+Since exponentiating and taking logarithms are each others inverse functions we can, trivially, write any positive number, say the number 2, as $2 = e^{\log_e(2)}$. This means that we can write the exponential function with base 2 as
+$$f(t) = 2^t = (e^{\log_e(2)})^t = e^{\log_e(2)t}$$
+In fact we are free to write an exponential function with any base we like
+$$f(t) = 2^t = e^{\log_e(2)t} = 10^{\log_{10}(2)t} = \pi^{\log_{\pi}(2)t} ~ \mathrm{etc.}$$
+
+To get the derivative of this function we use the chain rule on a function of the form $f(t) = e^{ct}$ to obtain $\mathrm{d} e^{ct} / \mathrm{d} t = c e^{ct}$ thus giving
+$$\frac{\mathrm{d} }{\mathrm{d} t} 2^t = \log_e(2) e^{\log_e(2)t} = \log_e(2) 2^t$$
+and so it turns out that the proportionality constant is in fact $c_2 = \log_e(2)$
+```{r}
+log(2)
+```
+and it appears that
+$$\lim_{\mathrm d t \rightarrow 0} \left(\frac{b^{\mathrm{d} t} - 1}{\mathrm{d} t} \right) = \log_e(b)$$
+for all positive values, $b$.
+
+One reason that logarithms with base $e$ are called natural is that they show up as proportionality constants in derivatives of all non-natural exponential functions.
+
+To change the base of a logarithmic function, such as $t = g(y) = \log_e(2)$ consider again the relation $2 = e^{\log_e(2)}$, and take the logarithm to a different base, say 10, on both sides:
+$$\log_{10}(2) = \log_{10} (e^{\log_e(2)}) = \log_e(2)\log_{10}(e)$$
+These operations work for any combinations of bases, say $a$ and $b$, and for any positive number $y$ instead of 2, so a more general relation is
+$$\log_{a}(y) = \log_b(y)\log_{a}(b)$$
+As a bonus feature, consider that we could have expressed $\log_b(y)$ similarly leading to $$\log_a(b) = 1 / \log_b(a)$$
+
+
+## Derivatives of logarithmic functions
+
+Above we considered the derivative of exponential functions and for completeness will now consider the derivatives of logarithmic functions. That is, we are asking how to express derivatives such as
+$$\frac{\mathrm d }{\mathrm d x} \log_e(x) = ??$$
+
+Letting $x = e^y$ we already know that the derivative with respect to $y$ is 
+$$\frac{\mathrm d x}{\mathrm d y} = e^y$$
+What this means is that a nudge $\mathrm d x$ in $x$ causes a nudge $e^y \mathrm d y$ in $y$ along the line tanget to $x = e^y$, that is
+$$e^y \mathrm d y = \mathrm d x$$
+It also means that a nudge $\mathrm d y$ in $y$ causes a nudge in $x$:
+$$\mathrm d y = \frac{1}{e^y} \mathrm d x$$
+and because $\log_e(x) = y$ if $x = e^y$ we have upon rearrangement
+$$\frac{\mathrm d}{\mathrm d x}\log_e(x) = \frac{1}{x}$$
+showing that the derivative of the natural logarithm is the reciprocal function.
+
+If a logarithmic function is given with a different base, say, $y = \log_a(x)$, then recall that this can be written $y = \log_e(x) \log_a(e)$ or, if you prefer, $y = \log_e(x) /  \log_e(a)$ with derivative
+$$\frac{\mathrm d}{\mathrm d x}\log_a(x) = \frac{\log_a(e)}{x} = \frac{1}{x\log_e(a)}$$
+
+## On the value of $e$
+
+Suppose we want to compute the value of $e$ and that we come up with the idea to consider an approximating (Taylor) polynomial for $f(x) = e^x$ developed around $x_0=0$ and evaluated around $x = 1$; we choose $x=1$ because $e^1 = e$ gives us the value $e$ that we are after. The Taylor polynomial has the form
+$$P_n(x) = f(x_0) + f'(x_0)\frac{x - x_0}{1!} + f''(x_0)\frac{(x - x_0)^2}{2!} + f'''(x_0)\frac{(x - x_0)^3}{3!} + \ldots + f^{(n)}(x_0)\frac{(x - x_0)^n}{n!}$$
+For our application $x_0=0$, so $f(x_0) = e^0 = 1$, further $f'(x_0) = f''(x_0) = f^{(a)}(x_0) = e^0 = 1$ for all $a = 1, \ldots, n$, so the approximating polynomial for $e^x$ developed at $x_0=0$ and evaluated at $x=1$ is just
+$$e \approx P_n(1) = 1 + \frac{1}{1!} + \frac{1}{2!} + \ldots + \frac{1}{n!}$$
+The higher the $n$ the closer the approximation to $e$, and if we include all terms we get $e$ exactly:
+$$e = \sum_{n=0}^\infty \frac{1}{n!}$$
+where we used the convention $0! = 1$.
+
+How many terms are needed to get a reasonable approximation?
+
+Using 6 terms (beyond the initial 1) give 4 correct digits, 10 terms give 8 correct digits and 17 terms give (at least) 20 correct digits as the following **R** commands show: 
+```{r}
+print(exp(1), digits=20)
+print(sum(1/factorial(0:6)), digits=20)
+print(sum(1/factorial(0:10)), digits=20)
+print(sum(1/factorial(0:17)), digits=20)
+```
+
+Another fun fact arises if we go back and consider the Taylor polynomial as a function of $x$:
+$$P_\infty(x) = 1 + \frac{x}{1!} + \frac{x^2}{2!} + \frac{x^3}{3!} + \ldots = \sum_{n=0}^\infty \frac{x^n}{n!}$$
+Now consider taking the derivative of this function
+$$\frac{\mathrm d P_\infty(x)}{\mathrm d x} = 0 + 1 + \frac{x}{1!} + \frac{x^2}{2!} + \ldots$$
+so clearly 
+$$\frac{\mathrm d P_\infty(x)}{\mathrm d x} = \sum_{n=0}^\infty \frac{x^n}{n!} = P_\infty(x)$$
+and we get back the same function. Since $e^x$ is _the_ function which is its own derivative, we have shown that
+$$e^x = \sum_{n=0}^\infty \frac{x^n}{n!}$$
+and we can think of $e^x$ just being short-hand notation for that particular infinite series.
+
+<!-- ## Misc -->
+
+<!-- Before we proceed we will exponentiate on both sides of $y = \log_e(x)$ to obtain $e^y = x$. Recall that the derivative is the rate of change, that is the slope of the tangent line to the function, so what we are asking for is that a tiny nudge to the left-hand side $\mathrm d(e^y) = e^y \mathrm d y$ equals a tiny nudge to the right-hand side $\mathrm d x$: -->
+<!-- $$e^y \mathrm d y = \mathrm d x$$ -->
+<!-- Forcing these two nudges to be equal is what causes the nudge in $x$ and the nudge in $y$ to be along the tangent line. -->
+
+<!-- Since $e^y = x$ and $y = \log_e(x)$ we can rearrange to obtain -->
+<!-- $$\frac{\mathrm d}{\mathrm d x}\log_e(x) = \frac{1}{e^y} = \frac{1}{x}$$ -->
+<!-- showing that the derivative of the natural logarithm is the inverse function. -->
+
