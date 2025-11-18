@@ -1,0 +1,1445 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+
+<meta name="author" content="Rune Haubo B Christensen" />
+
+
+<title>Linear and Mixed-Effects Models for RCT Analysis</title>
+
+<script src="01_rct_models_files/header-attrs-2.29/header-attrs.js"></script>
+<script src="01_rct_models_files/jquery-3.6.0/jquery-3.6.0.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link href="01_rct_models_files/bootstrap-3.3.5/css/bootstrap.min.css" rel="stylesheet" />
+<script src="01_rct_models_files/bootstrap-3.3.5/js/bootstrap.min.js"></script>
+<script src="01_rct_models_files/bootstrap-3.3.5/shim/html5shiv.min.js"></script>
+<script src="01_rct_models_files/bootstrap-3.3.5/shim/respond.min.js"></script>
+<style>h1 {font-size: 34px;}
+       h1.title {font-size: 38px;}
+       h2 {font-size: 30px;}
+       h3 {font-size: 24px;}
+       h4 {font-size: 18px;}
+       h5 {font-size: 16px;}
+       h6 {font-size: 12px;}
+       code {color: inherit; background-color: rgba(0, 0, 0, 0.04);}
+       pre:not([class]) { background-color: white }</style>
+<script src="01_rct_models_files/jqueryui-1.13.2/jquery-ui.min.js"></script>
+<link href="01_rct_models_files/tocify-1.9.1/jquery.tocify.css" rel="stylesheet" />
+<script src="01_rct_models_files/tocify-1.9.1/jquery.tocify.js"></script>
+<script src="01_rct_models_files/navigation-1.1/tabsets.js"></script>
+<link href="01_rct_models_files/highlightjs-9.12.0/default.css" rel="stylesheet" />
+<script src="01_rct_models_files/highlightjs-9.12.0/highlight.js"></script>
+
+<style type="text/css">
+  code{white-space: pre-wrap;}
+  span.smallcaps{font-variant: small-caps;}
+  span.underline{text-decoration: underline;}
+  div.column{display: inline-block; vertical-align: top; width: 50%;}
+  div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+  ul.task-list{list-style: none;}
+    </style>
+
+<style type="text/css">code{white-space: pre;}</style>
+<script type="text/javascript">
+if (window.hljs) {
+  hljs.configure({languages: []});
+  hljs.initHighlightingOnLoad();
+  if (document.readyState && document.readyState === "complete") {
+    window.setTimeout(function() { hljs.initHighlighting(); }, 0);
+  }
+}
+</script>
+
+
+
+
+
+
+
+
+
+<style type = "text/css">
+.main-container {
+  max-width: 940px;
+  margin-left: auto;
+  margin-right: auto;
+}
+img {
+  max-width:100%;
+}
+.tabbed-pane {
+  padding-top: 12px;
+}
+.html-widget {
+  margin-bottom: 20px;
+}
+button.code-folding-btn:focus {
+  outline: none;
+}
+summary {
+  display: list-item;
+}
+details > summary > p:only-child {
+  display: inline;
+}
+pre code {
+  padding: 0;
+}
+</style>
+
+
+
+<!-- tabsets -->
+
+<style type="text/css">
+.tabset-dropdown > .nav-tabs {
+  display: inline-table;
+  max-height: 500px;
+  min-height: 44px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.tabset-dropdown > .nav-tabs > li.active:before, .tabset-dropdown > .nav-tabs.nav-tabs-open:before {
+  content: "\e259";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li.active:before {
+  content: "\e258";
+  font-family: 'Glyphicons Halflings';
+  border: none;
+}
+
+.tabset-dropdown > .nav-tabs > li.active {
+  display: block;
+}
+
+.tabset-dropdown > .nav-tabs > li > a,
+.tabset-dropdown > .nav-tabs > li > a:focus,
+.tabset-dropdown > .nav-tabs > li > a:hover {
+  border: none;
+  display: inline-block;
+  border-radius: 4px;
+  background-color: transparent;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li {
+  display: block;
+  float: none;
+}
+
+.tabset-dropdown > .nav-tabs > li {
+  display: none;
+}
+</style>
+
+<!-- code folding -->
+
+
+
+<style type="text/css">
+
+#TOC {
+  margin: 25px 0px 20px 0px;
+}
+@media (max-width: 768px) {
+#TOC {
+  position: relative;
+  width: 100%;
+}
+}
+
+@media print {
+.toc-content {
+  /* see https://github.com/w3c/csswg-drafts/issues/4434 */
+  float: right;
+}
+}
+
+.toc-content {
+  padding-left: 30px;
+  padding-right: 40px;
+}
+
+div.main-container {
+  max-width: 1200px;
+}
+
+div.tocify {
+  width: 20%;
+  max-width: 260px;
+  max-height: 85%;
+}
+
+@media (min-width: 768px) and (max-width: 991px) {
+  div.tocify {
+    width: 25%;
+  }
+}
+
+@media (max-width: 767px) {
+  div.tocify {
+    width: 100%;
+    max-width: none;
+  }
+}
+
+.tocify ul, .tocify li {
+  line-height: 20px;
+}
+
+.tocify-subheader .tocify-item {
+  font-size: 0.90em;
+}
+
+.tocify .list-group-item {
+  border-radius: 0px;
+}
+
+
+</style>
+
+
+
+</head>
+
+<body>
+
+
+<div class="container-fluid main-container">
+
+
+<!-- setup 3col/9col grid for toc_float and main content  -->
+<div class="row">
+<div class="col-xs-12 col-sm-4 col-md-3">
+<div id="TOC" class="tocify">
+</div>
+</div>
+
+<div class="toc-content col-xs-12 col-sm-8 col-md-9">
+
+
+
+
+<div id="header">
+
+
+
+<h1 class="title toc-ignore">Linear and Mixed-Effects Models for RCT
+Analysis</h1>
+<h4 class="author">Rune Haubo B Christensen</h4>
+<h4 class="date">2020-05-12 – version 1.0-2</h4>
+
+</div>
+
+
+<div id="summary" class="section level1" number="1">
+<h1><span class="header-section-number">1</span> Summary</h1>
+<p>This summary describes practical take-home messages and
+recommendations with minimal mathematical notation. The main sections of
+this note are more formal and mathematically precise.</p>
+<p>The purpose of this note is to outline a general model for analysis
+of two-visit, two-group, parallel, randomised, clinical trials (RCTs),
+to discuss various related analysis including ANCOVA and <span
+class="math inline">\(t\)</span>-tests of end-of-trial (EOT) and
+change-from-baseline (CHG) values. The purpose is also to provide a
+basis for extensions of this model such as effect modification and
+considerations of power – such extensions will be discussed in
+subsequent notes.</p>
+<p>Key results in this note are:</p>
+<ol style="list-style-type: decimal">
+<li>A general model for two-group, parallel RCTs with baseline and EOT
+measurements can be formulated as a linear model with a bivariate
+variance-covariance structure. For two visits this model can also be
+identified as a mixed-effects models with random-effects for
+subjects.</li>
+<li>The conditional model for EOT measurements given baseline
+measurements is the conventional (industry standard) ANCOVA model whose
+parameters can be identified as functions of the parameters of the
+general model. Here the coefficient for the treatment variable is
+interpretable as the treatment <em>effect</em> under the assumption of
+no baseline group differences (which will be zero on average in a
+randomized study). Inference in the ANCOVA model is conditional on the
+baseline difference between treatment groups is zero.</li>
+<li>The ANCOVA model gives exactly the same estimate of and inference
+for the treatment effect whether EOT or change-from-baseline (CHG)
+values are used as response variable. This is not the case for marginal
+models commonly used in clinical research.</li>
+<li>A two-sample <span class="math inline">\(t\)</span>-test of EOT
+values ignoring baseline values is identifiable as a marginal model for
+EOT in the general model. The estimated mean difference can be expressed
+in terms of the parameters of the general model. This approach is in
+general inefficient since information in baseline values is
+ignored.</li>
+<li>A two-sample <span class="math inline">\(t\)</span>-test of CHG
+values is identifiable as a marginal model for EOT in the general model.
+The estimated mean difference can be expressed in terms of the
+parameters of the general model but differs from the estimated mean
+difference of the marginal model for EOT values. This model is more
+efficient than the marginal model for EOT values but still inferior to
+the conditional and general models.</li>
+<li>Examples in <strong>R</strong> based on simulated data are included
+for all the considered analyses.</li>
+</ol>
+<p>Recommendations:</p>
+<ol style="list-style-type: decimal">
+<li>The most complete analysis is obtained using the <em>general RCT
+model</em> optionally fixing baseline differences between treatment
+groups to zero.</li>
+<li>A much simpler, but still insightful, analysis that can be performed
+by even rudimentary statistical software packages is provided by an
+ANCOVA analysis.</li>
+<li>Two-sample <span class="math inline">\(t\)</span>-tests are not
+recommended since this approach is not invariant to whether outcome
+(EOT) or change-from-baseline (CHG) values are analyzed.</li>
+</ol>
+</div>
+<div id="introduction" class="section level1" number="2">
+<h1><span class="header-section-number">2</span> Introduction</h1>
+<p>The purpose of this note is to outline a general model for analysis
+of two-visit, two-group parallel randomised clinical trials (RCTs).</p>
+<p>The choice of model forms the basis for several extensions including
+multi-visit (longitudinal) trials, multi-group trials, crossover trials,
+stratified trials, categorical or survival outcomes, multi-trial
+analyses etc. Further, the model may be extended to include terms for
+subgroups or effect modifiers.</p>
+<p>The treatment in this note also provides a foundation for
+considerations of power of different models, designs and analyses. Power
+will be considered in a subsequent note.</p>
+<p>We consider a study with at least two visits (baseline and end-of
+trial, EOT) and two groups (placebo and active). We assume that the data
+are not greatly affected by drop-out or other types of missing values,
+that, for example, biomarker concentrations are accurately measured
+without batch or lab variations and with all concentrations reliably
+determined above quantification limits. If such data-problems are
+present they may dominate data considerations and render the
+considerations presented here of minor relevance.</p>
+<p>We begin by formulating a general model as a linear model with a
+bivariate variance-covariance structure. We then show how this model is
+related to a mixed-effects model with random-effects for subjects and
+how a standard ANCOVA analysis appears as a conditional analysis. While
+the conditional model is the industry standard for analysis of
+two-visit, two-group, parallel RCTs, clinical research practice often
+analyse such trial data using two-sample <span
+class="math inline">\(t\)</span>-tests of either end-of-trial (EOT)
+measurements or change-from-baseline (CHG, also referred to as change
+scores). Under randomization these two approaches are often (correctly)
+argued to estimate and test the same treatment effect <a
+href="https://training.cochrane.org/handbook/current/chapter-10#section-10-5">(see
+e.g, the Cochrane Handbook)</a> but in practice they can (and often do)
+provide different estimates and measures of evidence (eg. <span
+class="math inline">\(p\)</span>-values). The clinical researcher may
+wonder which is most efficient and most correct – analysis of EOT or CHG
+values. This note shows that the <span
+class="math inline">\(t\)</span>-tests of EOT and CHG values correspond
+to marginal models and discourage their use in practice.</p>
+<p>The general model formulated here is an extension of the model
+discussed by Carstensen (2013) allowing for the residual variance to
+depend on visit.</p>
+<p>After a theoretical outline of the general model and simpler models
+derived from it, examples in <strong>R</strong> using simulated data
+illustrate the models, analyses and their connections. The note ends
+with brief perspectives on related topics. Sections marked with an
+asterisk (*) can be skipped without disrupting the flow of the text.</p>
+</div>
+<div id="models" class="section level1" number="3">
+<h1><span class="header-section-number">3</span> Models</h1>
+<div id="general-rct-model" class="section level2" number="3.1">
+<h2><span class="header-section-number">3.1</span> General RCT
+model</h2>
+<p>We will consider the following general model for a two-group parallel
+RCT with baseline measurements and continuous outcome: <span
+class="math display">\[Y_{ti(g)} = \mu + \beta_t + \gamma_g +
+\alpha_{tg} + \eta_i + e_{ti(g)}, \quad e_{i(g)} = [e_{1i(g)},
+e_{2i(g)}]^\top \sim N(\mathbf 0, \mathbf{\Sigma}), \quad
+\mathbf{\Sigma} = \begin{bmatrix} \sigma_1^2 &amp; \sigma_{12} \\
+\sigma_{12} &amp; \sigma_2^2 \end{bmatrix} \]</span></p>
+<p>Here</p>
+<ol style="list-style-type: decimal">
+<li><span class="math inline">\(t=1, 2\)</span> index time points
+(baseline and EOT visits), <span class="math inline">\(g=1, 2\)</span>
+index treatment groups (placebo and active), <span
+class="math inline">\(i=1, \ldots, 2n\)</span> index subjects (with
+<span class="math inline">\(n\)</span> subjects in each treatment group)
+giving a total of <span class="math inline">\(2n\)</span> observations
+at baseline and EOT respectively.</li>
+<li><span class="math inline">\(Y\)</span> is the variable of interest
+with both baseline (<span class="math inline">\(t=1\)</span>) and EOT
+(<span class="math inline">\(t=2\)</span>) measurements on all
+individuals</li>
+<li><span class="math inline">\(\mu\)</span> is a constant term
+(intercept)</li>
+<li><span class="math inline">\(\beta_t\)</span> quantifies the mean
+change with time</li>
+<li><span class="math inline">\(\gamma_g\)</span> quantifies the mean
+difference between treatment groups</li>
+<li><span class="math inline">\(\alpha_{tg}\)</span> quantifies the
+treatment effect: the difference between placebo and active in going
+from baseline to EOT</li>
+<li><span class="math inline">\(\eta_i\)</span> are possible
+stratification variables or other variables which it is desired to
+include in the model</li>
+<li><span class="math inline">\(e_{ti(g)}\)</span> is a random error
+with mean zero, variance depending on <span
+class="math inline">\(t\)</span> and potential non-zero correlation over
+time. Due to inclusion and exclusion criteria and random drift it is
+usually seen that <span class="math inline">\(\sigma_2 &gt;
+\sigma_1\)</span> so letting variance depend in <span
+class="math inline">\(t\)</span> often makes good sense. We may also
+parameterise with <span class="math inline">\(\sigma_2 = p
+\sigma_1\)</span>.</li>
+</ol>
+<p>To identify the parameters (parameter estimability) we take <span
+class="math inline">\(\beta_1 = \gamma_1 = \alpha_{11} = \alpha_{12} =
+\alpha_{21} = 0\)</span> (without loss of generality). Since <span
+class="math inline">\(\gamma_2\)</span> quantifying baseline differences
+between the treatment groups will have expectation zero under
+randomization of subjects to treatment groups it will often also make
+sense to assume this parameter is zero.</p>
+<p>The general model above can be represented directly as a bivariate
+normal distribution model of the form: <span
+class="math display">\[\begin{bmatrix} Y_1 \\ Y_2 \end{bmatrix} \sim
+N\left( \begin{bmatrix} \mu_1 \\ \mu_2 \end{bmatrix}, \begin{bmatrix}
+\sigma^2_{1} &amp; \sigma_{12} \\ \sigma_{12} &amp; \sigma_{2}^2
+\end{bmatrix} \right)\]</span></p>
+<p>Under the restrictions above the parameters are related to the
+multivariate means by:</p>
+<ol style="list-style-type: decimal">
+<li><span class="math inline">\(\mu_1 = \mu + \gamma_g +
+\eta_i\)</span></li>
+<li><span class="math inline">\(\mu_2 = \mu + \gamma_g + \beta_2 +
+\alpha_{g2} + \eta_i\)</span></li>
+<li><span class="math inline">\(\sigma_{12} = \rho \sigma_1
+\sigma_2\)</span></li>
+</ol>
+<p>Here the parameter space is restricted by <span
+class="math inline">\(\sigma_1 &gt; 0\)</span>, <span
+class="math inline">\(\sigma_2 &gt; 0\)</span> and <span
+class="math inline">\(-1 &lt; \rho &lt; 1\)</span>.</p>
+<p>If there are no missing values the model has an analytical solution
+if considered as a multivariate linear model <span
+class="math display">\[\mathbf Y = \mathbf X \mathbf \beta + \mathbf
+E\]</span> where <span class="math inline">\(\mathbf Y\)</span> is an
+<span class="math inline">\(n \times 2\)</span> matrix with baseline and
+EOT measurements in each column, <span class="math inline">\(\mathbf
+X\)</span> is an <span class="math inline">\(n \times p\)</span> design
+matrix for the <span class="math inline">\(p \times 2\)</span> matrix of
+parameters <span class="math inline">\(\mathbf \beta\)</span>. The <span
+class="math inline">\(n \times 2\)</span> matrix of errors has a
+bivariate normal distribution with mean <span
+class="math inline">\(\mathbf 0\)</span> and variance-covariance matrix
+<span class="math inline">\(\mathbf{\Sigma}\)</span> as given above. If
+we ignore stratification variables, <span
+class="math inline">\(\mathbf\beta\)</span> parameterise the 4 means
+also parameterised by <span class="math inline">\(\mu\)</span>, <span
+class="math inline">\(\beta_2\)</span>, <span
+class="math inline">\(\gamma_2\)</span> and <span
+class="math inline">\(\alpha_{22}\)</span> above and the model is also
+referred to as a <em>multivariate ANOVA</em>, <em>MANOVA</em> or
+<em>repeated measures ANOVA</em> though the last term is often used
+inaccurately to refer to several distinct situations.</p>
+<p>One way to view the general RCT model is as a model with the
+following components:</p>
+<ol style="list-style-type: decimal">
+<li>An ANOVA for treatment group differences at each visit (baseline,
+intermediate visits and final visit)</li>
+<li>Mean differences between visits</li>
+<li>Error variance that is allowed to differ arbitrarily between
+visits</li>
+<li>Arbitrary correlation between measurements at different visits in
+the same subject</li>
+</ol>
+<p>This model allows for baseline differences between treatment groups
+which under randomization has expectation zero. In a sense the model is
+therefore over-parameterised for RCTs.</p>
+<p>The estimated mean difference at EOT is <span
+class="math display">\[\begin{aligned} \mathsf{E}[Y_{2i(2)} - Y_{2i(1)}]
+&amp; = \mu + \beta_2 + \gamma_2 + \alpha_{22} + \eta_i - (\mu + \beta_2
++ \gamma_1 + \alpha_{21} + \eta_i) \\ &amp; = (\gamma_2 - \gamma_1) +
+(\alpha_{22} - \alpha_{21}) \\ &amp; = \gamma_2 + \alpha_{12}
+\end{aligned}\]</span> and the estimated mean difference at baseline is
+<span class="math display">\[\begin{aligned} \mathsf{E}[Y_{1i(2)} -
+Y_{1i(1)}] &amp; = \mu + \beta_1 + \gamma_2 + \alpha_{12} + \eta_i -
+(\mu + \beta_1 + \gamma_1 + \alpha_{11} + \eta_i) \\ &amp; = (\gamma_2 -
+\gamma_1) + (\alpha_{12} - \alpha_{11}) \\ &amp; = \gamma_2
+\end{aligned}\]</span> The estimated mean difference in
+change-from-baseline is therefore <span
+class="math display">\[\begin{aligned} \mathsf{E}[(Y_{1i(2)} -
+Y_{1i(2)}) - (Y_{2i(1)} - Y_{1i(1)})] &amp; = \mathsf{E}[Y_{1i(2)} -
+Y_{1i(1)}] -  \mathsf{E}[Y_{1i(2)} - Y_{1i(1)}] \\ &amp; = (\gamma_2 -
+\gamma_1) + (\alpha_{22} - \alpha_{21}) - (\gamma_2 - \gamma_1) -
+(\alpha_{12} - \alpha_{11}) \\ &amp; = \alpha_{22}
+\end{aligned}\]</span> Unless <span
+class="math inline">\(\gamma_2\)</span> is fixed at zero estimates of
+the difference in mean change from baseline and the difference in
+estimated mean at EOT will therefore not agree numerically.</p>
+</div>
+<div id="fixing-baseline-treatment-differences-to-zero"
+class="section level2" number="3.2">
+<h2><span class="header-section-number">3.2</span> Fixing baseline
+treatment differences to zero</h2>
+<p>Under randomization we know that there cannot be any true mean
+difference between treatment groups at baseline and it therefore makes
+sense not to estimate <span class="math inline">\(\gamma_2\)</span>
+which represents this difference but simply fix it to zero. The
+resulting model reads <span class="math display">\[Y_{ti(g)} = \mu +
+\beta_t + \alpha_{tg} + \eta_i + e_{ti(g)}, \quad e_{i(g)} = [e_{1i(g)},
+e_{2i(g)}]^\top \sim N(\mathbf 0, \mathbf{\Sigma}), \quad
+\mathbf{\Sigma} = \begin{bmatrix} \sigma_1^2 &amp; \sigma_{12} \\
+\sigma_{12} &amp; \sigma_2^2 \end{bmatrix} \]</span> with the same
+parameter restrictions for <span class="math inline">\(\beta_t\)</span>
+and <span class="math inline">\(\alpha_{tg}\)</span> considered
+above.</p>
+<p>It can be shown that the parameter estimates from this model
+(identified by a tilde) can be described in terms of the estimates from
+the general RCT model (identified by a hat): <span
+class="math display">\[\begin{aligned} \tilde \mu &amp;= \hat \mu +
+\hat\gamma_2/2 \\ \tilde\beta_2 &amp;= \hat\beta_2 - \hat\gamma_2 (1 -
+\hat\phi) / 2 \\ \tilde\alpha_{22} &amp;= \hat\alpha_{22}
++  \hat\gamma_2 (1 - \hat\phi) \\ \end{aligned}\]</span></p>
+</div>
+<div id="mixed-effects-model" class="section level2" number="3.3">
+<h2><span class="header-section-number">3.3</span> Mixed-effects
+model</h2>
+<p>The general RCT model above can also be expressed as a linear
+mixed-effects model, ie. a model including random-effects.</p>
+<p>Formally the mixed-effects model is described by the marginal
+distribution of the random-effect and the conditional distribution of
+the outcome given observed values of the random effects: <span
+class="math display">\[B \sim N(\mathbf 0, \mathbf{\Sigma}_B), \quad
+Y|B=b \sim N(\mathbf{\mu}_Y, \mathbf{\Sigma}_Y)\]</span> where <span
+class="math inline">\(\mathbf{\Sigma}_B\)</span> and <span
+class="math inline">\(\mathbf{\Sigma}_Y\)</span> are variance-covariance
+matrices.</p>
+<p>While all mixed-effects models imply certain marginal multivariate
+normal models (for <span class="math inline">\(Y\)</span>) it is not all
+marginal multivariate normal models which can be expressed as linear
+mixed-effects models.</p>
+<p>The following mixed-effects model can be shown to represent the
+general RCT (marginal and bivariate) model above: <span
+class="math display">\[Y_{ti(g)} = \mu + \beta_t + \gamma_g +
+\alpha_{tg} + \eta_i + s_i + e_{ti(g)},  \quad s_i \sim N(0,
+\sigma_{s}^{2}), \quad e_{ti(g)} \sim N(0, \sigma^2_{e_t})\]</span>
+where <span class="math inline">\(s_i\)</span> is the random-effect for
+the <span class="math inline">\(i\)</span>th subject.</p>
+<p>Here <span class="math display">\[\mathsf{Var}[Y_{1i}] = \sigma_s^2 +
+\sigma_{e_1}^2, \quad \mathsf{Var}[Y_{2i}] = \sigma_s^2 +
+\sigma_{e_2}^2, \quad \mathsf{Cov}[Y_{1i}, Y_{2i}] = \sigma_s^2\]</span>
+and <span class="math display">\[\mathsf{Corr}[Y_{1i}, Y_{2i}] = \rho =
+\frac{\sigma_s^2}{\sqrt{\sigma_s^2 + \sigma_{e_1}^2}\sqrt{\sigma_s^2 +
+\sigma_{e_2}^2}} \begin{cases}  = \frac{\sigma_s^2}{\sigma_s^2 +
+\sigma^2_e} &amp; \mathrm{if~} \sigma_e = \sigma_{e_1} =
+\sigma_{2_e}  \\ \approx \frac{\sigma_s^2}{\sigma_s^2 +
+\tilde\sigma^2_e},~ \tilde\sigma_e = (\sigma_{e_1} + \sigma_{e_2})/2
+&amp; \mathrm{if~}  \sigma_{e_1} \approx \sigma_{2_e}
+\end{cases}\]</span> thus the variance-covariance parameters of the
+bivariate (marginal) model can be identified as</p>
+<ol style="list-style-type: decimal">
+<li><span class="math inline">\(\sigma_1^2 = \sigma_s^2 +
+\sigma_{e_1}^2\)</span></li>
+<li><span class="math inline">\(\sigma_2^2 = \sigma_s^2 +
+\sigma_{e_2}^2\)</span></li>
+<li><span class="math inline">\(\sigma_{12} = \sigma_s^2\)</span></li>
+</ol>
+<p>In the mixed model the parameter space is further restricted by <span
+class="math inline">\(\sigma_s \geq 0\)</span> leading to <span
+class="math inline">\(0 \leq \rho &lt; 1\)</span>. Strictly speaking the
+two models (mixed-effects and multivariate) are therefore not identical:
+while they will give exactly the same parameter estimates if <span
+class="math inline">\(\hat\rho \geq 0\)</span>, they will no agree if
+<span class="math inline">\(\hat\rho &lt; 0\)</span> in the bivariate
+model.</p>
+<div id="constant-error-variance" class="section level3" number="3.3.1">
+<h3><span class="header-section-number">3.3.1</span> Constant error
+variance</h3>
+<p>If the error variance is not allowed to vary with <span
+class="math inline">\(t\)</span>, ie. <span
+class="math inline">\(e_{ti(g)} \sim N(0, \sigma_e^2)\)</span>, then we
+have</p>
+<ol style="list-style-type: decimal">
+<li><span class="math inline">\(\sigma_1^2 = \sigma_2^2 = \sigma_{s}^{2}
++ \sigma^2_{e}\)</span></li>
+<li><span class="math inline">\(\rho = \sigma_s^2/ (\sigma_s^2 +
+\sigma_{e}^2)\)</span></li>
+</ol>
+<p>which is the covariance structure known as <em>compound
+symmetry</em>.</p>
+</div>
+<div id="multivisit-model---mmrm" class="section level3" number="3.3.2">
+<h3><span class="header-section-number">3.3.2</span> Multivisit model -
+MMRM*</h3>
+<p>The bivariate model can be trivially extended to more than two
+visits, ie. to include intermediate visits which is common in for
+example pharmaceutical RCTs. With <span class="math inline">\(m\)</span>
+visits the residual variance-covariance matrix is <span
+class="math inline">\(m\times m\)</span> containing <span
+class="math inline">\(m(m-1)\)</span> unique variance-covariance
+parameters. This model is known as the <em>Mixed Model for Repeated
+Measurements</em> (MMRM, Mallinckrodt et al 2001).</p>
+<p>The MMRM is often used for analysis of pharmaceutical trials in a
+version conditioning on baseline measurements of the outcome. This
+version of the model can be formulated both for EOT and CHG values while
+the general RCT model as outlined above only makes sense as a model for
+EOT values.</p>
+</div>
+</div>
+<div id="conditional-ancova-model" class="section level2" number="3.4">
+<h2><span class="header-section-number">3.4</span> Conditional (ANCOVA)
+model</h2>
+<p>The conditional distribution of the EOT value given the observed
+baseline value now has the form <span
+class="math display">\[\begin{aligned} Y_2|(Y_1 = y_1) &amp; \sim
+N\left( \mu_2 + \phi (y_1 - \mu_1), \sigma_2^2(1 - \rho^2) \right),
+\quad \phi = \rho \frac{\sigma_2}{\sigma_1} \\
+&amp; \sim N\left(\mu + \gamma_g + \beta_2 + \alpha_{g2} + \eta_i + \phi
+(y_1 - \mu - \gamma_g - \eta_i), (\sigma_{s}^{2} + \sigma_{e_2}^2)(1 -
+\rho^2) \right) \\
+&amp; \sim N\left( [\mu(1-\phi) + \beta_2] + \phi y_1 +
+[\gamma_g(1-\phi) + \alpha_{g2}] + \eta_i (1- \phi), (\sigma_{s}^{2} +
+\sigma_{e_2}^2)(1 - \rho^2) \right) \\
+\end{aligned}\]</span></p>
+<p>This is an ANCOVA (ANalysis of COVAriance) model with the following
+identities:</p>
+<ol style="list-style-type: decimal">
+<li><span class="math inline">\(\mu(1-\phi) + \beta_2\)</span> is the
+intercept</li>
+<li><span class="math inline">\(\phi\)</span> is the coefficient to the
+baseline measurement <span class="math inline">\(y_1\)</span></li>
+<li><span class="math inline">\(\gamma_g(1-\phi) + \alpha_{g2}\)</span>
+is the coefficient for the treatment variable</li>
+<li>coefficients to the <span
+class="math inline">\(\eta_i\)</span>-variables will appear scaled by
+<span class="math inline">\((1-\phi)\)</span></li>
+<li>the residual variance is <span class="math inline">\((\sigma_{s}^{2}
++ \sigma_{e_2}^2)(1 - \rho^2)\)</span> which depends on <span
+class="math inline">\(\sigma_1\)</span> through <span
+class="math inline">\(\rho\)</span>.</li>
+</ol>
+<p>Note that interpreting the coefficient for the treatment variable as
+an estimate of <em>the treatment effect</em> corresponds to assuming
+<span class="math inline">\(\gamma_g = 0\)</span> for <span
+class="math inline">\(g=1, 2\)</span>.</p>
+</div>
+<div id="a-simpler-conditional-model" class="section level2"
+number="3.5">
+<h2><span class="header-section-number">3.5</span> A simpler conditional
+model</h2>
+<p>Assuming that <span class="math inline">\(\gamma_2 = 0\)</span>,
+constant residual variance and ignoring stratification variables (<span
+class="math inline">\(\eta_i\)</span>) leads to the following
+simplification of the model above: <span
+class="math display">\[Y_{ti(g)} = \mu + \beta_t + \alpha_{tg} + s_i +
+e_{ti(g)},  \quad s_i \sim N(0, \sigma_{s}^{2}), \quad e_{ti(g)} \sim
+N(0, \sigma_e^2) \]</span></p>
+<p>This leads to the conditional distribution: <span
+class="math display">\[Y_2|(Y_1 = y_1) \sim N\left\{ \tilde\mu + \rho
+y_1 + \alpha_{g2}, (\sigma_{s}^{2} + \sigma_e^2)(1 - \rho^2)
+\right\}\]</span> where <span class="math inline">\(\tilde\mu =
+[\mu(1-\rho) + \beta_2]\)</span> is the intercept.</p>
+<p>This ANCOVA model has been the pharmaceutical industry standard for
+analysis of RCTs for many years while implementation in research
+practice has been slower (Vickers and Altman (2001)).</p>
+<p>An aspect of the ANCOVA model is that analysis of <span
+class="math inline">\(Y_2\)</span> (EOT values) gives <em>exactly</em>
+the same inference for the treatment effect as using <span
+class="math inline">\(Z = Y_2 - Y_1\)</span> (change from baseline (CHG)
+values) as the response. The parameter values for the intercept changes
+(as the following shows) but estimate and standard error for the
+treatment effect remain unchanged.</p>
+<p>The conditional model has the following expectation <span
+class="math display">\[\mathsf{E}[Y_2 | Y_1 = y_1] = \tilde\mu + \rho
+y_1 + \alpha_{2g}\]</span> while a similar model for CHG reads <span
+class="math display">\[\mathsf{E}[Y_2 - Y_1 | Y_1 = y_1] =
+\mathsf{E}[Y_2 | Y_1 = y_1] - y_1 = \tilde\mu^* + \rho^* y_1 +
+\alpha_{2g}^*\]</span> leading to <span
+class="math inline">\(\tilde\mu^* = \tilde\mu\)</span>, <span
+class="math inline">\(\alpha_{2g}^* = \alpha_{2g}\)</span> and <span
+class="math inline">\(\rho^* = \rho + 1\)</span> thus all parameters
+remain the same except that the coefficient the baseline values is one
+unit higher if CHG values are used as response as compared to if EOT
+values are used as response.</p>
+<p>Without a model framework researchers turn to two-sample <span
+class="math inline">\(t\)</span>-tests for analysis of RCT data which
+has lead to a debate about whether to base an analysis on EOT or CHG
+values. The troubling part is not only that these approaches are often
+inefficient but that they generally give different, sometimes
+conflicting, answers.</p>
+</div>
+<div id="marginal-models" class="section level2" number="3.6">
+<h2><span class="header-section-number">3.6</span> Marginal models</h2>
+<div id="marginal-model-for-eot-values" class="section level3"
+number="3.6.1">
+<h3><span class="header-section-number">3.6.1</span> Marginal model for
+EOT values</h3>
+<p>Taking our starting point in the bivariate normal model the marginal
+model for <span class="math inline">\(Y_2\)</span> can be written <span
+class="math display">\[Y_2 \sim N(\mu_2, \sigma^2_2), \quad
+\mathrm{where}\quad \mu_2 = \mu + \gamma_g + \beta_2 + \alpha_{g2} +
+\eta_i\]</span> Setting <span class="math inline">\(\tilde\mu = \mu +
+\beta_2\)</span>, ignoring <span class="math inline">\(\eta_i\)</span>
+and assuming <span class="math inline">\(\gamma_g = 0\)</span> we have
+<span class="math display">\[Y_2 \sim N(\tilde\mu + \alpha_{g2},
+\sigma^2_2)\]</span> which is just a two-sample <span
+class="math inline">\(t\)</span>-test with <span
+class="math inline">\(\alpha_{2g}\)</span> being the mean
+difference.</p>
+</div>
+<div id="marginal-model-for-chg-values" class="section level3"
+number="3.6.2">
+<h3><span class="header-section-number">3.6.2</span> Marginal model for
+CHG values</h3>
+<p>The marginal model for CHG values is also univariate normal with mean
+<span class="math display">\[\mathsf{E}[Y_2 - Y_1] = \mu_2 - \mu_1 = \mu
++ \gamma_g + \beta_2 + \alpha_{g2} + \eta - (\mu + \gamma_g + \eta) =
+\beta_2 + \alpha_{2g}\]</span> and variance <span
+class="math display">\[\mathsf{Var}[Y_2 - Y_1] = \mathsf{Var}[Y_2] +
+\mathsf{Var}[Y_1] - 2 \mathsf{Cov}[Y_2, Y_1] = \sigma_2^2 + \sigma_1^2 -
+2\rho\sigma_1\sigma_2\]</span> we therefore have the following model
+<span class="math display">\[Z = (Y_2 - Y_1) \sim N(\beta_2 +
+\alpha_{2g}, \sigma_z^2), \quad \sigma_z^2 = \sigma_2^2 + \sigma_1^2 -
+2\rho\sigma_1\sigma_2\]</span> Specifically this also has the form as a
+two-sample <span class="math inline">\(t\)</span>-test with <span
+class="math inline">\(\alpha_{2g}\)</span> being the mean
+difference.</p>
+<p>Note that both <span class="math inline">\(\gamma_g\)</span> (and
+<span class="math inline">\(\mu\)</span> as well) cancels out in the
+model for CHG values thus inference is <em>conditioned</em> on baseline
+differences between treatment groups <span
+class="math inline">\(\gamma_g\)</span>. In the marginal model for EOT
+values, on the other hand, the treatment effect <span
+class="math inline">\(\gamma_g + \alpha_{2g}\)</span> is confounded by
+(often random) baseline differences between treatment groups which may
+in fact be substantial if the study is not large and the randomization
+less than perfect.</p>
+<p>This is perhaps the main reason to prefer analysis of CHG over EOT
+values (I haven’t seen this point being made explicitly in the
+literature before but perhaps I just missed it), though of course the
+bivariate or conditional models are much preferred over the marginal
+ones.</p>
+<p>Assuming equal variances, <span class="math inline">\(\sigma_2 =
+\sigma_1\)</span> gives <span class="math display">\[\sigma_z^2 =
+2\sigma_2^2(1-\rho)\]</span> thus <span class="math inline">\(\sigma_z =
+\sigma_2\)</span> if <span class="math inline">\(\rho = 1/2\)</span> and
+in general</p>
+<ol style="list-style-type: decimal">
+<li><span class="math inline">\(\sigma_z &lt; \sigma_2\)</span> if <span
+class="math inline">\(\rho &gt; 1/2\)</span></li>
+<li><span class="math inline">\(\sigma_z = \sigma_2\)</span> if <span
+class="math inline">\(\rho = 1/2\)</span></li>
+<li><span class="math inline">\(\sigma_z &gt; \sigma_2\)</span> if <span
+class="math inline">\(\rho &lt; 1/2\)</span></li>
+</ol>
+</div>
+<div id="unequal-variance-for-chg-values" class="section level3"
+number="3.6.3">
+<h3><span class="header-section-number">3.6.3</span> Unequal variance
+for CHG values</h3>
+<p>The marginal model for EOT values is indifferent to the value of
+<span class="math inline">\(\sigma_1\)</span> but in the marginal model
+for CHG values the variance is <span class="math inline">\(\sigma_z^2 =
+\sigma_2^2 + \sigma_1^2 - 2\rho\sigma_1\sigma_2\)</span> which depends
+on <span class="math inline">\(\sigma_1\)</span>.</p>
+<p>Setting again <span class="math inline">\(\sigma_2 = p
+\sigma_1\)</span> for <span class="math inline">\(p &gt; 0\)</span>
+(often <span class="math inline">\(p &gt; 1\)</span>) we have <span
+class="math display">\[\sigma_z^2 = \sigma_2^2(1 + p^{-2} - 2 \rho /
+p)\]</span> which shows that</p>
+<ol style="list-style-type: decimal">
+<li><span class="math inline">\(\sigma_z^2 &lt; \sigma_2^2\)</span> when
+<span class="math inline">\(\frac{\sigma_1}{\sigma_2} &lt;
+2\rho\)</span> (common)</li>
+<li><span class="math inline">\(\sigma_z^2 = \sigma_2^2\)</span> when
+<span class="math inline">\(\frac{\sigma_1}{\sigma_2} = 2\rho\)</span>
+(simple)</li>
+<li><span class="math inline">\(\sigma_z^2 &gt; \sigma_2^2\)</span> when
+<span class="math inline">\(\frac{\sigma_1}{\sigma_2} &gt;
+2\rho\)</span> (unusual)</li>
+</ol>
+<p>Note that when <span class="math inline">\(\rho &gt; 0.5\)</span>,
+which is most common, we will almost always be in case 1 thus this is
+the most important situation to consider. Taking <span
+class="math inline">\(p=1\)</span> and <span
+class="math inline">\(\rho=1/2\)</span> lands us in case 2 which is
+probably the simplest scenario.</p>
+</div>
+</div>
+</div>
+<div id="data-examples-in-r" class="section level1" number="4">
+<h1><span class="header-section-number">4</span> Data examples in
+<strong>R</strong></h1>
+<p>For simulations and analyses we need to load the following
+packages:</p>
+<pre class="r"><code># load packages:
+library(mvtnorm)    # to simulate data
+library(data.table) # to manipulate data
+library(lmerTest)   # to fit linear mixed models
+library(nlme)       # to fit general multivariate models</code></pre>
+<div id="example-data" class="section level2" number="4.1">
+<h2><span class="header-section-number">4.1</span> Example data</h2>
+<p>In this section we will be considering example data simulated from a
+thought-up RCT having <span class="math inline">\(n=100\)</span>
+subjects in each treatment arm. We will simulate from a version of the
+general model above with <span class="math inline">\(\alpha_{2g} =
+.4\)</span>, <span class="math inline">\(\sigma_2 = 1\)</span>, <span
+class="math inline">\(p=1.1\)</span>, (thus <span
+class="math inline">\(\sigma_1 = \sigma_2 / p \approx 0.91\)</span>),
+<span class="math inline">\(\rho=0.7\)</span> and all remaining
+parameters being zero.</p>
+<p>Simulate data from general model:</p>
+<pre class="r"><code>n &lt;- 100
+rho &lt;- 0.7
+p &lt;- 1.1
+sig2 &lt;- 1
+sig1 &lt;- sig2/p
+sig12 &lt;- rho*sig1*sig2
+Sigma &lt;- rbind(c(sig1^2, sig12),
+               c(sig12, sig2^2))
+# sigs &lt;- sig2*sqrt(rho)
+# sige &lt;- sig2*sqrt(1-rho)
+mu &lt;- 0; beta &lt;- c(0, 0); gamma &lt;- c(0, 0); alpha &lt;- c(0, 0, 0, 0.4);
+dlong &lt;- data.table(id = factor(rep(1:(2*n), each=2)),
+                    time = factor(rep(c(&quot;bl&quot;, &quot;eot&quot;), 2*n)),
+                    group = factor(rep(c(&quot;plc&quot;, &quot;trt&quot;), each=2*n)))
+                    # subgrp = factor(rep(rep(c(&quot;female&quot;, &quot;male&quot;), each=n/2), 2)))
+X_alpha &lt;- model.matrix(~ 0 + time:group, data=dlong)
+mean_vec &lt;- c(X_alpha %*% alpha)
+set.seed(290980)
+resid &lt;- c(t(rmvnorm(2*n, c(0, 0), Sigma)))
+dlong[, y := mean_vec + resid]
+# Cast to wide format:
+d &lt;- dcast(dlong, id + group ~ time, value.var = &quot;y&quot;)
+d[, chg := eot - bl]
+d[]
+## Key: &lt;id, group&gt;
+##          id  group         bl         eot         chg
+##      &lt;fctr&gt; &lt;fctr&gt;      &lt;num&gt;       &lt;num&gt;       &lt;num&gt;
+##   1:      1    plc -1.9676069 -1.61160891  0.35599803
+##   2:      2    plc -0.1855609 -0.02207562  0.16348525
+##   3:      3    plc  1.5305123  0.91100092 -0.61951142
+##   4:      4    plc -0.9793270 -1.96495012 -0.98562315
+##   5:      5    plc -0.8815645  0.55350967  1.43507420
+##  ---                                                 
+## 196:    196    trt -1.7435534 -0.69698619  1.04656725
+## 197:    197    trt  1.2170396  2.60888544  1.39184585
+## 198:    198    trt -0.3636947 -0.33403755  0.02965718
+## 199:    199    trt  1.0556851  1.17868680  0.12300169
+## 200:    200    trt  0.8583773  1.26370386  0.40532651</code></pre>
+<p>Here the mean structure is given by:</p>
+<pre class="r"><code>ftable(tapply(mean_vec, dlong[, .(time, group)], mean))
+##      group plc trt
+## time              
+## bl         0.0 0.0
+## eot        0.0 0.4</code></pre>
+</div>
+<div id="general-model" class="section level2" number="4.2">
+<h2><span class="header-section-number">4.2</span> General model</h2>
+<p>Using the <code>gls</code> function from the <code>nlme</code>
+package we can fit the general bivariate model while allowing for
+unequal residual variances for the two treatment arms:</p>
+<pre class="r"><code>fmg2 &lt;- gls(y ~ time * group, data=dlong, 
+            correlation = corCompSymm(form = ~ 1| id),
+            weights = varIdent(form=~1|time))</code></pre>
+<p>The fitted model is summarized with</p>
+<pre class="r"><code>summary(fmg2)
+## Generalized least squares fit by REML
+##   Model: y ~ time * group 
+##   Data: dlong 
+##        AIC     BIC   logLik
+##   991.7901 1019.66 -488.895
+## 
+## Correlation Structure: Compound symmetry
+##  Formula: ~1 | id 
+##  Parameter estimate(s):
+##       Rho 
+## 0.7166752 
+## Variance function:
+##  Structure: Different standard deviations per stratum
+##  Formula: ~1 | time 
+##  Parameter estimates:
+##       bl      eot 
+## 1.000000 1.119458 
+## 
+## Coefficients:
+##                       Value  Std.Error   t-value p-value
+## (Intercept)      -0.0822107 0.09195758 -0.894006  0.3719
+## timeeot           0.0117839 0.07405929  0.159114  0.8737
+## grouptrt         -0.0146046 0.13004765 -0.112302  0.9106
+## timeeot:grouptrt  0.3389632 0.10473565  3.236369  0.0013
+## 
+##  Correlation: 
+##                  (Intr) timeet grptrt
+## timeeot          -0.245              
+## grouptrt         -0.707  0.174       
+## timeeot:grouptrt  0.174 -0.707 -0.245
+## 
+## Standardized residuals:
+##         Min          Q1         Med          Q3         Max 
+## -2.74139516 -0.70387523  0.06122328  0.72239254  2.45783331 
+## 
+## Residual standard error: 0.9195758 
+## Degrees of freedom: 400 total; 396 residual</code></pre>
+<p>and the estimated residual variance-covariance matrix is (the
+<code>getCovMat</code> function is defined in the appendices):</p>
+<pre class="r"><code>(covmat &lt;- getCovMat(fmg2, data=dlong[time != &quot;chg&quot;]))
+##           [,1]      [,2]
+## [1,] 0.8456196 0.6784301
+## [2,] 0.6784301 1.0597185</code></pre>
+<p>corresponding to the parameter estimates</p>
+<pre class="r"><code>(rhohat &lt;- cov2cor(covmat)[1, 2])
+## [1] 0.7166752
+(phat &lt;- sqrt(covmat[2, 2] / covmat[1, 1]))
+## [1] 1.119458</code></pre>
+<p>Observe that the displayed <span
+class="math inline">\(p\)</span>-value for treatment effect is slightly
+inaccurate since it actually has 198 rather than 396 degrees of freedom
+assumed by the software.</p>
+<p>For convenience we collect the values of the parameters used in the
+simulation as well as the parameter estimates here:</p>
+<pre><code>##     parameter sim_value    estimate
+##        &lt;char&gt;     &lt;num&gt;       &lt;num&gt;
+##  1:        mu 0.0000000 -0.08221065
+##  2:    beta_2 0.0000000  0.01178386
+##  3:   gamma_g 0.0000000 -0.01460456
+##  4:  alpha_2g 0.4000000  0.33896320
+##  5:   sigma_s 0.7977240  0.82366871
+##  6:  sigma_e1 0.4359847  0.40888807
+##  7:   sigma_1 0.9090909  0.91957577
+##  8:   sigma_2 1.0000000  1.02942629
+##  9:  sigma_12 0.6363636  0.67843014
+## 10:       rho 0.7000000  0.71667517
+## 11:         p 1.1000000  1.11945782
+## 12:       phi 0.7700000  0.80228763</code></pre>
+<p>This general RCT model can also be fitted as a simple multivariate
+linear model:</p>
+<pre class="r"><code>fmu &lt;- lm(cbind(bl, eot) ~ group, data=d)</code></pre>
+<p>with coefficient matrix (simple transformation of the parameter
+estimates found above)</p>
+<pre class="r"><code>coef(fmu)
+##                      bl        eot
+## (Intercept) -0.08221065 -0.0704268
+## grouptrt    -0.01460456  0.3243586</code></pre>
+<p>and residual variance-covariance matrix</p>
+<pre class="r"><code>crossprod(fmu$residuals) / (2*n -2)
+##            bl       eot
+## bl  0.8456196 0.6784302
+## eot 0.6784302 1.0597185</code></pre>
+<p>as we also found using <code>lme</code> above.</p>
+<div id="setting-baseline-differences-to-zero" class="section level3"
+number="4.2.1">
+<h3><span class="header-section-number">4.2.1</span> Setting baseline
+differences to zero</h3>
+<p>We can fit the general RCT model while restricting the baseline
+differences <span class="math inline">\(\gamma_2 - \gamma_1\)</span> to
+zero as follows:</p>
+<pre class="r"><code>dlong[, timegroup := ifelse(time == &quot;eot&quot; &amp; group == &quot;trt&quot;, 
+                             &quot;eot_trt&quot;, &quot;bl&quot;)]
+fmg2b &lt;- gls(y ~ time + timegroup, data=dlong, 
+            correlation = corCompSymm(form = ~ 1| id),
+            weights = varIdent(form=~1|time))
+coef(summary(fmg2b))
+##                        Value  Std.Error    t-value     p-value
+## (Intercept)      -0.08951293 0.06486231 -1.3800454 0.168349312
+## timeeot           0.01322761 0.07292929  0.1813758 0.856165184
+## timegroupeot_trt  0.33607570 0.10153053  3.3100952 0.001017919</code></pre>
+<p>The treatment difference in this model can be expressed in terms of
+the parameters of the general RCT model as: <span
+class="math inline">\(\hat\gamma_2(1 - \hat\phi) +
+\hat\alpha_{2g}\)</span></p>
+<pre class="r"><code>gamma_g * (1 - phi) + alpha_2g
+## [1] 0.3360757</code></pre>
+<p>and equals the treatment difference estimate from an ANCOVA.</p>
+</div>
+</div>
+<div id="mixed-effects-model-1" class="section level2" number="4.3">
+<h2><span class="header-section-number">4.3</span> Mixed-effects
+model</h2>
+<p>We can also fit the general RCT model as a mixed-effects model:</p>
+<pre class="r"><code>fmm1 &lt;- lme(y ~ time * group, data=dlong,
+            random = ~1|id,
+            weights = varIdent(form=~1|time))
+stopifnot(isTRUE(all.equal(fixef(fmm1), coef(fmg2))))</code></pre>
+<p>but with a different parameterisation of the variance-covariance
+structure:</p>
+<pre class="r"><code>VarCorr(fmm1)
+## id = pdLogChol(1) 
+##             Variance  StdDev   
+## (Intercept) 0.6784301 0.8236687
+## Residual    0.1671894 0.4088880</code></pre>
+<p>Note however that the covariance parameter in the bivariate model
+corresponds to the subject-variance parameter in this model, <span
+class="math inline">\(\sigma_{12} = \sigma_s^2\)</span>, and that the
+sum of variances (<span class="math inline">\(\sigma_s^2 +
+\sigma_{e_1}^2\)</span>) equals <span
+class="math inline">\(\sigma_1^2\)</span> from the bivariate model
+(<code>sigma_1</code>):</p>
+<pre class="r"><code>sqrt(sum(as.numeric(VarCorr(fmm1)[, 1])))
+## [1] 0.9195757</code></pre>
+<div id="constant-error-variance-1" class="section level3"
+number="4.3.1">
+<h3><span class="header-section-number">4.3.1</span> Constant error
+variance</h3>
+<p>The model with constant error variance can be fitted by simply
+removing the <code>weights</code> term:</p>
+<pre class="r"><code>fmm2 &lt;- lme(y ~ group * time, data=dlong,
+            random = ~1|id)</code></pre>
+<p>The model can also be fitted with <code>lmer</code> from the
+<strong>lme4</strong> package using <strong>lmerTest</strong> to provide
+<span class="math inline">\(p\)</span>-values:</p>
+<pre class="r"><code>fmm3 &lt;- lmer(y ~ group * time + (1|id), data=dlong)
+stopifnot(isTRUE(all.equal(fixef(fmm2), fixef(fmm3))))
+print(summary(fmm3), corr=FALSE)
+## Linear mixed model fit by REML. t-tests use Satterthwaite&#39;s method [
+## lmerModLmerTest]
+## Formula: y ~ group * time + (1 | id)
+##    Data: dlong
+## 
+## REML criterion at convergence: 982.9
+## 
+## Scaled residuals: 
+##      Min       1Q   Median       3Q      Max 
+## -2.20751 -0.55467 -0.00212  0.48842  2.43440 
+## 
+## Random effects:
+##  Groups   Name        Variance Std.Dev.
+##  id       (Intercept) 0.6784   0.8237  
+##  Residual             0.2742   0.5237  
+## Number of obs: 400, groups:  id, 200
+## 
+## Fixed effects:
+##                   Estimate Std. Error        df t value Pr(&gt;|t|)   
+## (Intercept)       -0.08221    0.09760 262.74965  -0.842  0.40040   
+## grouptrt          -0.01460    0.13803 262.74965  -0.106  0.91582   
+## timeeot            0.01178    0.07406 198.00000   0.159  0.87374   
+## grouptrt:timeeot   0.33896    0.10474 198.00000   3.236  0.00142 **
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1</code></pre>
+<p>Observe that <strong>lmerTest</strong> correctly determines the
+degrees of freedom to 198 for the <span
+class="math inline">\(t\)</span>-test of the treatment effect.</p>
+<p>Since <code>lmer</code> does not allow structural error variance the
+general model cannot be fitted with <code>lmer</code>.</p>
+</div>
+</div>
+<div id="conditional-models" class="section level2" number="4.4">
+<h2><span class="header-section-number">4.4</span> Conditional
+models</h2>
+<p>The conditional model for EOT using BL as a covariate is fitted
+with:</p>
+<pre class="r"><code>summary(fm_eot &lt;- lm(eot ~ bl + group, data=d))
+## 
+## Call:
+## lm(formula = eot ~ bl + group, data = d)
+## 
+## Residuals:
+##      Min       1Q   Median       3Q      Max 
+## -1.93557 -0.49577  0.03771  0.42816  2.13871 
+## 
+## Coefficients:
+##             Estimate Std. Error t value Pr(&gt;|t|)    
+## (Intercept) -0.00447    0.07212  -0.062  0.95064    
+## bl           0.80229    0.05562  14.423  &lt; 2e-16 ***
+## grouptrt     0.33608    0.10179   3.302  0.00114 ** 
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## Residual standard error: 0.7197 on 197 degrees of freedom
+## Multiple R-squared:  0.5255, Adjusted R-squared:  0.5207 
+## F-statistic: 109.1 on 2 and 197 DF,  p-value: &lt; 2.2e-16</code></pre>
+<p>In this model the estimate of <span class="math inline">\(\hat\phi =
+\hat\rho \cdot \hat\sigma_2 / \hat\sigma_1\)</span> is</p>
+<pre class="r"><code>(phihat &lt;- rho * sigma_2 / sigma_1)
+## [1] 0.8022876</code></pre>
+<p>equals the coefficient for the baseline variable, <code>bl</code>.
+The treatment difference, <code>grouptrt</code> can be expressed in
+terms of the parameter estimates from the general model as <span
+class="math inline">\(\hat\gamma_2(1 - \hat\phi) +
+\hat\alpha_{2g}\)</span></p>
+<pre class="r"><code>gamma_g * (1 - phihat) + alpha_2g
+## [1] 0.3360757</code></pre>
+<p>which equals the treatment estimate from the general RCT model in
+which we set <span class="math inline">\(\gamma_2 = 0\)</span>. Further,
+the intercept is <span class="math inline">\(\hat\mu(1 - \hat\phi) +
+\hat\beta_2\)</span>:</p>
+<pre class="r"><code>mu*(1 - phihat) + beta_2
+## [1] -0.004470208</code></pre>
+<p>and the residual standard deviation, <span
+class="math inline">\(\sigma\)</span> is (approximately):</p>
+<pre class="r"><code>sqrt((sigma_2^2)*(1 - rho^2))
+## [1] 0.7179292
+sigma(fm_eot) # reference
+## [1] 0.7197491</code></pre>
+<p>The small difference here is due to a difference in degrees of
+freedom for the error variance – the sums of squares can be recovered
+accurately:</p>
+<pre class="r"><code>r &lt;- resid(fmg2)
+r &lt;- r[names(attr(r, &quot;std&quot;)) == &quot;eot&quot;]
+sum(r^2) * (1 - rho^2) 
+## [1] 102.0536
+sum(resid(fm_eot)^2)
+## [1] 102.0536</code></pre>
+<p>The conditional model for CHG gives the following parameter
+estimates:</p>
+<pre class="r"><code>fm_chg &lt;- lm(chg ~ bl + group, data=d)
+coef(summary(fm_chg))
+##                 Estimate Std. Error     t value     Pr(&gt;|t|)
+## (Intercept) -0.004470205 0.07212003 -0.06198285 0.9506393282
+## bl          -0.197712343 0.05562384 -3.55445305 0.0004741557
+## grouptrt     0.336075701 0.10179113  3.30162062 0.0011413097</code></pre>
+<p>Here we see that the coefficient for <code>bl</code> equals the
+coefficient for <code>bl</code> in <code>fm_eot</code> minus 1:</p>
+<pre class="r"><code>phihat - 1
+## [1] -0.1977124</code></pre>
+<p>and all other parameter estimates (including standard errors and
+<span class="math inline">\(p\)</span>-values) are identical to those
+for the EOT values.</p>
+<p>The residual standard deviation in the conditional model for CHG is
+the same as in the conditional model for EOT:</p>
+<pre class="r"><code>sigma(fm_chg)
+## [1] 0.7197491</code></pre>
+</div>
+<div id="marginal-models-1" class="section level2" number="4.5">
+<h2><span class="header-section-number">4.5</span> Marginal models</h2>
+<p>We can fit the marginal model as special case of a linear model
+(using <code>lm</code>) or directly use a two-sample <span
+class="math inline">\(t\)</span>-test - here for EOT values:</p>
+<pre class="r"><code>summary(lm(eot ~ group, data=d))
+## 
+## Call:
+## lm(formula = eot ~ group, data = d)
+## 
+## Residuals:
+##      Min       1Q   Median       3Q      Max 
+## -2.66438 -0.72459  0.07987  0.74813  2.53016 
+## 
+## Coefficients:
+##             Estimate Std. Error t value Pr(&gt;|t|)  
+## (Intercept) -0.07043    0.10294  -0.684    0.495  
+## grouptrt     0.32436    0.14558   2.228    0.027 *
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## Residual standard error: 1.029 on 198 degrees of freedom
+## Multiple R-squared:  0.02446,    Adjusted R-squared:  0.01953 
+## F-statistic: 4.964 on 1 and 198 DF,  p-value: 0.02701
+keep &lt;- c(&quot;statistic&quot;, &quot;p.value&quot;)
+do.call(cbind, t.test(eot ~ group, data=d)[keep])
+##   statistic    p.value
+## t    -2.228 0.02700933</code></pre>
+<p>Here <span class="math inline">\(\hat\gamma_g +
+\hat\alpha_{2g}\)</span> shows up as the mean difference:</p>
+<pre class="r"><code>gamma_g + alpha_2g
+## [1] 0.3243586</code></pre>
+<p>and <span class="math inline">\(\hat\sigma_2\)</span> is:</p>
+<pre class="r"><code>sigma_2
+## [1] 1.029426</code></pre>
+<p>The marginal model for the CHG values gives:</p>
+<pre class="r"><code>summary(lm(chg ~ group, data=d))
+## 
+## Call:
+## lm(formula = chg ~ group, data = d)
+## 
+## Residuals:
+##      Min       1Q   Median       3Q      Max 
+## -1.94382 -0.50210  0.06421  0.49933  2.04225 
+## 
+## Coefficients:
+##             Estimate Std. Error t value Pr(&gt;|t|)   
+## (Intercept)  0.01178    0.07406   0.159  0.87374   
+## grouptrt     0.33896    0.10474   3.236  0.00142 **
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## Residual standard error: 0.7406 on 198 degrees of freedom
+## Multiple R-squared:  0.05024,    Adjusted R-squared:  0.04544 
+## F-statistic: 10.47 on 1 and 198 DF,  p-value: 0.001419
+do.call(cbind, t.test(chg ~ group, data=d)[keep])
+##   statistic     p.value
+## t -3.236369 0.001419109</code></pre>
+<p>Here <span class="math inline">\(\hat\beta_2\)</span> shows up as the
+intercept:</p>
+<pre class="r"><code>beta_2
+## [1] 0.01178386</code></pre>
+<p>and <span class="math inline">\(\hat\alpha_{2g}\)</span> shows up as
+the coefficient to the treatment effect.</p>
+<p>The residual standard deviation is <span class="math inline">\(\sqrt{
+\sigma_2^2 + \sigma_1^2 - 2\rho \sigma_2 \sigma_1}\)</span>:</p>
+<pre class="r"><code>sqrt(sigma_2^2 + sigma_1^2 - 2* rho * sigma_1 * sigma_2)
+## [1] 0.7405929</code></pre>
+<p>Note how estimate and standard error are exactly the same as for the
+general model.</p>
+</div>
+</div>
+<div id="perspectives" class="section level1" number="5">
+<h1><span class="header-section-number">5</span> Perspectives*</h1>
+<p>The general RCT model and the simpler models derived from it that we
+have discussed in the note can be extended in numerous ways. Often
+models for RCTs are kept relatively simple in the sense that there is no
+need to adjust for a long array of confounders. Some extensions not
+discussed in this note are, however, often relevant to consider:</p>
+<ol style="list-style-type: decimal">
+<li>The randomization procedure is sometimes, often due to practical
+constraints or convenience, restricted in particular ways. Common
+examples include stratified randomisation procedures and
+cluster-randomised trials. These aspects necessitate that stratification
+or cluster variables be handled in the model.</li>
+<li>In many cases it is of relevance to consider more than one version
+of the active treatment, eg. in dose-response studies. This is naturally
+handled by letting the treatment factor assume levels for the treatment
+arms and by comparing each active arm with placebo in <span
+class="math inline">\(t\)</span>-tests.</li>
+<li>The models discussed here represent the simplest version of a
+longitudinal trial with only two visits – in many studies there are
+several intermediate visits. The general RCT model extends naturally to
+multiple visits as briefly mentioned in the section on the mixed model
+for repeated measurements. While designs with intermediate visits adds
+computational strains on the computations they have advantages in terms
+of handling drop-outs and they can also have practical advantages.</li>
+</ol>
+<p>In addition to model <em>extensions</em> there are a number of topics
+related to the analysis of RCTs which are often of considerable
+importance:</p>
+<ol style="list-style-type: decimal">
+<li>The most important aspect not given explicit treatment in this note
+is the issue of subject drop-out or missing values. Even moderate
+drop-outs can seriously compromise the integrity of an RCT – the
+validity of an RCT rests on being able to compare treatment groups as
+they were randomized but if subjects drop out before the final
+assessment this is not possible any more. The main purpose of methods to
+handle missing values is to enable valid inference for the treatment
+difference even if final assessments are not available on some subjects.
+Popular methods for handling of missing values include the MMRM which
+was briefly mentioned but <em>multiple imputation</em> (MI) methods are
+also popular.</li>
+<li>Closely related to the topic of missing values is that of
+<em>estimands</em>. An estimand is the quantity which is to be estimated
+in light of post-randomization events. Examples of post-randomisation
+events include subject drop-out, use of rescue medication and much more.
+The MMRM entails a particular estimand and MI methods allow for a wide
+array of different estimands. The choice of estimand – whether
+deliberately chosen or a happenstance consequence of the chosen
+statistical model, can have substantial impact on the size of the
+estimated treatment effect.</li>
+<li>Counter-factual theory is usually considered for observational
+studies with the purpose of drawing <em>causal inference</em>, but the
+foundations for these topics is closely related to randomised
+trials.</li>
+<li>This note assumes that interest is in comparison of an active
+treatment arm with placebo. This is often the case when the hypothesis
+is one of <em>superiority</em>; in other situations interest centers
+around hypothesis of <em>equivalence</em> or <em>non-inferiority</em>
+which often leads to trials with active comparator arms rather than
+placebo arms.</li>
+<li>Estimated means (also known as LS-means, marginal, ao.) are useful
+as model-based supplements to observed means. A wide variety of
+estimated means can be computed and they all have their own
+interpretation. In the context of RCTs they have to be computed in such
+a way that they reflect the estimated treatment effects and are relevant
+and valid for all randomised subjects.</li>
+<li>Planning of RCTs are usually based on power and sample size
+computations. It is inconvenient to consider power in the context of the
+general RCT directly due to the complexities involved, but the
+connection of this model to the simple marginal models and two-sample
+<span class="math inline">\(t\)</span>-tests can be utilized so that
+power and sample size tools for <span
+class="math inline">\(t\)</span>-tests can be put to used to provide
+power in wider generality. Further, these connections facilitate a
+conceptual understanding of the effects of various changes to the design
+on power and sample size.</li>
+</ol>
+</div>
+<div id="references" class="section level1" number="6">
+<h1><span class="header-section-number">6</span> References</h1>
+<ol style="list-style-type: decimal">
+<li>Bendix Carstensen (2013) A note on repeated measures analysis and
+conditioning on baseline measurement. Retrieved from <a
+href="https://bendixcarstensen.com/Notes/rm.pdf">https://bendixcarstensen.com/Notes/rm.pdf</a>
+April 2020.</li>
+<li>CH Mallinckrodt, WS Clark and SR David (2001) Accounting for dropout
+bias using mixed-effects models. <em>Journal of Biopharmaceutical
+Statistics</em>, 11, p. 9-21.</li>
+<li>Andrew J Vickers and Douglas G Altman. Analysing controlled trials
+with baseline and follow-up measurements. <em>British Medical
+Journal</em>, 323:1123–1124, November 2001.</li>
+</ol>
+</div>
+<div id="appendices" class="section level1" number="7">
+<h1><span class="header-section-number">7</span> Appendices</h1>
+<div id="getcovmat-function" class="section level2" number="7.1">
+<h2><span class="header-section-number">7.1</span>
+<code>getCovMat</code> function</h2>
+<pre class="r"><code>getCorMat &lt;- function(gls_object, data=NULL) {
+  stopifnot(!is.null(data))
+  x &lt;- gls_object
+  cor.struct &lt;- x$modelStruct$corStruct
+  if(is.null(cor.struct)) {
+    message(&quot;no correlation structure in model&quot;)
+    return(numeric(0L))
+  }
+  call &lt;- paste0(class(cor.struct)[1], &quot;(value=&quot;, 
+                 deparse(as.vector(coef(cor.struct, unconstrained = FALSE)),
+                         width.cutoff = 500L), &quot;, form=&quot;, 
+                 paste(attr(cor.struct, &quot;formula&quot;), collapse=&quot; &quot;), &quot;)&quot;)
+  corObj &lt;- eval.parent(parse(text=call))
+  corMatrix(Initialize(corObj, data))[[1]]
+}
+getVarMat &lt;- function(gls_object, matrix=TRUE) {
+  x &lt;- gls_object
+  var.struct &lt;- x$modelStruct$varStruct
+  if(is.null(var.struct)) return(x$sigma^2)
+  if(class(var.struct)[1] != &quot;varIdent&quot;) {
+    message(paste0(&quot;Cannot extract variance-matrix from&quot;, 
+                   &quot; non-varIdent structures. Returning sigma&quot;))
+    return(x$sigma^2)
+  }
+  rel.var &lt;- c(1, coef(x$modelStruct$varStruct, unconstrained = FALSE))
+  res &lt;- (rel.var * x$sigma)^2
+  if(matrix) res &lt;- diag(c(res))
+  res
+}
+getCovMat &lt;- function(gls_object, data) {
+  ## Extract the variance-covariance matrix of a linear model with 
+  ## structured error variance-covariance matrix
+  x &lt;- gls_object
+  corMat &lt;- getCorMat(x, data)
+  varMat &lt;- sqrt(getVarMat(x, matrix=FALSE))
+  if(length(corMat) == 0) return(varMat)
+  if(length(varMat) == 1) corMat * rep(varMat^2, ncol(corMat)) else
+    diag(c(varMat)) %*% corMat %*% diag(c(varMat))
+}</code></pre>
+</div>
+<div id="version-of-r-and-r-packages" class="section level2"
+number="7.2">
+<h2><span class="header-section-number">7.2</span> Version of
+<strong>R</strong> and <strong>R</strong>-packages</h2>
+<pre class="r"><code>sessionInfo()
+## R version 4.4.2 (2024-10-31)
+## Platform: aarch64-apple-darwin20
+## Running under: macOS Sequoia 15.6.1
+## 
+## Matrix products: default
+## BLAS:   /Library/Frameworks/R.framework/Versions/4.4-arm64/Resources/lib/libRblas.0.dylib 
+## LAPACK: /Library/Frameworks/R.framework/Versions/4.4-arm64/Resources/lib/libRlapack.dylib;  LAPACK version 3.12.0
+## 
+## locale:
+## [1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
+## 
+## time zone: Europe/Copenhagen
+## tzcode source: internal
+## 
+## attached base packages:
+## [1] stats     graphics  grDevices utils     datasets  methods   base     
+## 
+## other attached packages:
+## [1] nlme_3.1-166      lmerTest_3.1-3    lme4_1.1-35.5     Matrix_1.7-1     
+## [5] data.table_1.16.4 mvtnorm_1.3-3    
+## 
+## loaded via a namespace (and not attached):
+##  [1] gtable_0.3.6        jsonlite_1.8.9      dplyr_1.1.4        
+##  [4] compiler_4.4.2      tidyselect_1.2.1    Rcpp_1.0.13-1      
+##  [7] jquerylib_0.1.4     splines_4.4.2       scales_1.3.0       
+## [10] boot_1.3-31         yaml_2.3.10         fastmap_1.2.0      
+## [13] lattice_0.22-6      ggplot2_3.5.1       R6_2.5.1           
+## [16] generics_0.1.3      knitr_1.49          MASS_7.3-61        
+## [19] tibble_3.2.1        nloptr_2.1.1        munsell_0.5.1      
+## [22] rprojroot_2.0.4     minqa_1.2.8         bslib_0.8.0        
+## [25] pillar_1.9.0        rlang_1.1.6         utf8_1.2.4         
+## [28] cachem_1.1.0        xfun_0.52           sass_0.4.9         
+## [31] cli_3.6.3           magrittr_2.0.3      digest_0.6.37      
+## [34] grid_4.4.2          rstudioapi_0.17.1   lifecycle_1.0.4    
+## [37] vctrs_0.6.5         evaluate_1.0.1      glue_1.8.0         
+## [40] numDeriv_2016.8-1.1 fansi_1.0.6         colorspace_2.1-1   
+## [43] rmarkdown_2.29      pkgconfig_2.0.3     tools_4.4.2        
+## [46] htmltools_0.5.8.1</code></pre>
+</div>
+</div>
+
+
+
+</div>
+</div>
+
+</div>
+
+<script>
+
+// add bootstrap table styles to pandoc tables
+function bootstrapStylePandocTables() {
+  $('tr.odd').parent('tbody').parent('table').addClass('table table-condensed');
+}
+$(document).ready(function () {
+  bootstrapStylePandocTables();
+});
+
+
+</script>
+
+<!-- tabsets -->
+
+<script>
+$(document).ready(function () {
+  window.buildTabsets("TOC");
+});
+
+$(document).ready(function () {
+  $('.tabset-dropdown > .nav-tabs > li').click(function () {
+    $(this).parent().toggleClass('nav-tabs-open');
+  });
+});
+</script>
+
+<!-- code folding -->
+
+<script>
+$(document).ready(function ()  {
+
+    // temporarily add toc-ignore selector to headers for the consistency with Pandoc
+    $('.unlisted.unnumbered').addClass('toc-ignore')
+
+    // move toc-ignore selectors from section div to header
+    $('div.section.toc-ignore')
+        .removeClass('toc-ignore')
+        .children('h1,h2,h3,h4,h5').addClass('toc-ignore');
+
+    // establish options
+    var options = {
+      selectors: "h1,h2,h3",
+      theme: "bootstrap3",
+      context: '.toc-content',
+      hashGenerator: function (text) {
+        return text.replace(/[.\\/?&!#<>]/g, '').replace(/\s/g, '_');
+      },
+      ignoreSelector: ".toc-ignore",
+      scrollTo: 0
+    };
+    options.showAndHide = true;
+    options.smoothScroll = true;
+
+    // tocify
+    var toc = $("#TOC").tocify(options).data("toc-tocify");
+});
+</script>
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

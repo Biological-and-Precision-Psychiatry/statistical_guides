@@ -1,0 +1,722 @@
+---
+title: "Linear and Mixed-Effects Models for RCT Analysis"
+author: "Rune Haubo B Christensen"
+date: '2020-05-12 -- version 1.0-2'
+output:
+  pdf_document:
+    number_sections: yes
+    toc: yes
+    toc_depth: 3
+  html_document:
+    number_sections: yes
+    self_contained: no
+    toc: yes
+    toc_float: yes
+  word_document:
+    toc: yes
+    toc_depth: '3'
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE, collapse=TRUE)
+knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
+```
+
+# Summary
+
+This summary describes practical take-home messages and recommendations with minimal mathematical notation. The main sections of this note are more formal and mathematically precise.
+
+The purpose of this note is to outline a general model for analysis of two-visit, two-group, parallel, randomised, clinical trials (RCTs), to discuss various related analysis including ANCOVA and $t$-tests of end-of-trial (EOT) and change-from-baseline (CHG) values. The purpose is also to provide a basis for extensions of this model such as effect modification and considerations of power -- such extensions will be discussed in subsequent notes.
+
+Key results in this note are:
+
+1. A general model for two-group, parallel RCTs with baseline and EOT measurements can be formulated as a linear model with a bivariate variance-covariance structure. For two visits this model can also be identified as a mixed-effects models with random-effects for subjects.
+1. The conditional model for EOT measurements given baseline measurements is the conventional (industry standard) ANCOVA model whose parameters can be identified as functions of the parameters of the general model. Here the coefficient for the treatment variable is interpretable as the treatment _effect_ under the assumption of no baseline group differences (which will be zero on average in a randomized study). Inference in the ANCOVA model is conditional on the baseline difference between treatment groups is zero.
+1. The ANCOVA model gives exactly the same estimate of and inference for the treatment effect whether EOT or change-from-baseline (CHG) values are used as response variable. This is not the case for marginal models commonly used in clinical research. 
+1. A two-sample $t$-test of EOT values ignoring baseline values is identifiable as a marginal model for EOT in the general model. The estimated mean difference can be expressed in terms of the parameters of the general model. This approach is in general inefficient since information in baseline values is ignored.
+1. A two-sample $t$-test of CHG values is identifiable as a marginal model for EOT in the general model. The estimated mean difference can be expressed in terms of the parameters of the general model but differs from the estimated mean difference of the marginal model for EOT values. This model is more efficient than the marginal model for EOT values but still inferior to the conditional and general models.
+1. Examples in **R** based on simulated data are included for all the considered analyses.  
+
+Recommendations:
+
+1. The most complete analysis is obtained using the _general RCT model_ optionally fixing baseline differences between treatment groups to zero.
+1. A much simpler, but still insightful, analysis that can be performed by even rudimentary statistical software packages is provided by an ANCOVA analysis.
+1. Two-sample $t$-tests are not recommended since this approach is not invariant to whether outcome (EOT) or change-from-baseline (CHG) values are analyzed.
+
+# Introduction
+
+The purpose of this note is to outline a general model for analysis of two-visit, two-group parallel randomised clinical trials (RCTs).  
+
+The choice of model forms the basis for several extensions including multi-visit (longitudinal) trials, multi-group trials, crossover trials, stratified trials, categorical or survival outcomes, multi-trial analyses etc. Further, the model may be extended to include terms for subgroups or effect modifiers. 
+
+The treatment in this note also provides a foundation for considerations of power of different models, designs and analyses. Power will be considered in a subsequent note.
+
+We consider a study with at least two visits (baseline and end-of trial, EOT) and two groups (placebo and active). We assume that the data are not greatly affected by drop-out or other types of missing values, that, for example, biomarker concentrations are accurately measured without batch or lab variations and with all concentrations reliably determined above quantification limits. If such data-problems are present they may dominate data considerations and render the considerations presented here of minor relevance. 
+
+We begin by formulating a general model as a linear model with a bivariate variance-covariance structure. We then show how this model is related to a mixed-effects model with random-effects for subjects and how a standard ANCOVA analysis appears as a conditional analysis. While the conditional model is the industry standard for analysis of two-visit, two-group, parallel RCTs, clinical research practice often analyse such trial data using two-sample $t$-tests of either end-of-trial (EOT) measurements or change-from-baseline (CHG, also referred to as change scores). Under randomization these two approaches are often (correctly) argued to estimate and test the same treatment effect [(see e.g, the Cochrane Handbook)](https://training.cochrane.org/handbook/current/chapter-10#section-10-5) but in practice they can (and often do) provide different estimates and measures of evidence (eg. $p$-values). The clinical researcher may wonder which is most efficient and most correct -- analysis of EOT or CHG values. This note shows that the $t$-tests of EOT and CHG values correspond to marginal models and discourage their use in practice.
+
+The general model formulated here is an extension of the model discussed by Carstensen (2013) allowing for the residual variance to depend on visit.
+
+After a theoretical outline of the general model and simpler models derived from it, examples in **R** using simulated data illustrate the models, analyses and their connections. The note ends with brief perspectives on related topics. Sections marked with an asterisk (*) can be skipped without disrupting the flow of the text.
+
+# Models
+
+## General RCT model
+
+We will consider the following general model for a two-group parallel RCT with baseline measurements and continuous outcome:
+$$Y_{ti(g)} = \mu + \beta_t + \gamma_g + \alpha_{tg} + \eta_i + e_{ti(g)}, \quad e_{i(g)} = [e_{1i(g)}, e_{2i(g)}]^\top \sim N(\mathbf 0, \mathbf{\Sigma}), \quad \mathbf{\Sigma} = \begin{bmatrix} \sigma_1^2 & \sigma_{12} \\ \sigma_{12} & \sigma_2^2 \end{bmatrix} $$
+
+Here
+
+1. $t=1, 2$ index time points (baseline and EOT visits), $g=1, 2$ index treatment groups (placebo and active), $i=1, \ldots, 2n$ index subjects (with $n$ subjects in each treatment group) giving a total of $2n$ observations at baseline and EOT respectively.
+1. $Y$ is the variable of interest with both baseline ($t=1$) and EOT ($t=2$) measurements on all individuals
+1. $\mu$ is a constant term (intercept)
+1. $\beta_t$ quantifies the mean change with time
+1. $\gamma_g$ quantifies the mean difference between treatment groups
+1. $\alpha_{tg}$ quantifies the treatment effect: the difference between placebo and active in going from baseline to EOT
+1. $\eta_i$ are possible stratification variables or other variables which it is desired to include in the model
+1. $e_{ti(g)}$ is a random error with mean zero, variance depending on $t$ and potential non-zero correlation over time. Due to inclusion and exclusion criteria and random drift it is usually seen that $\sigma_2 > \sigma_1$ so letting variance depend in $t$ often makes good sense. We may also parameterise with $\sigma_2 = p \sigma_1$.
+
+To identify the parameters (parameter estimability) we take
+$\beta_1 = \gamma_1 = \alpha_{11} = \alpha_{12} = \alpha_{21} = 0$ (without loss of generality). Since $\gamma_2$ quantifying baseline differences between the treatment groups will have expectation zero under randomization of subjects to treatment groups it will often also make sense to assume this parameter is zero.
+
+The general model above can be represented directly as a bivariate normal distribution model of the form:
+$$\begin{bmatrix} Y_1 \\ Y_2 \end{bmatrix} \sim N\left( \begin{bmatrix} \mu_1 \\ \mu_2 \end{bmatrix}, \begin{bmatrix} \sigma^2_{1} & \sigma_{12} \\ \sigma_{12} & \sigma_{2}^2 \end{bmatrix} \right)$$
+
+Under the restrictions above the parameters are related to the multivariate means by:
+
+1. $\mu_1 = \mu + \gamma_g + \eta_i$
+1. $\mu_2 = \mu + \gamma_g + \beta_2 + \alpha_{g2} + \eta_i$
+1. $\sigma_{12} = \rho \sigma_1 \sigma_2$
+
+Here the parameter space is restricted by $\sigma_1 > 0$, $\sigma_2 > 0$ and $-1 < \rho < 1$. 
+
+If there are no missing values the model has an analytical solution if considered as a multivariate linear model
+$$\mathbf Y = \mathbf X \mathbf \beta + \mathbf E$$
+where $\mathbf Y$ is an $n \times 2$ matrix with baseline and EOT measurements in each column, $\mathbf X$ is an $n \times p$ design matrix for the $p \times 2$ matrix of parameters $\mathbf \beta$. The $n \times 2$ matrix of errors has a bivariate normal distribution with mean $\mathbf 0$ and variance-covariance matrix $\mathbf{\Sigma}$ as given above. 
+If we ignore stratification variables, $\mathbf\beta$ parameterise the 4 means also parameterised by $\mu$, $\beta_2$, $\gamma_2$ and $\alpha_{22}$ above and the model is also referred to as a _multivariate ANOVA_, _MANOVA_ or _repeated measures ANOVA_ though the last term is often used inaccurately to refer to several distinct situations. 
+
+One way to view the general RCT model is as a model with the following components:
+
+1. An ANOVA for treatment group differences at each visit (baseline, intermediate visits and final visit)
+1. Mean differences between visits
+1. Error variance that is allowed to differ arbitrarily between visits
+1. Arbitrary correlation between measurements at different visits in the same subject
+
+This model allows for baseline differences between treatment groups which under randomization has expectation zero. In a sense the model is therefore over-parameterised for RCTs.
+
+The estimated mean difference at EOT is 
+$$\begin{aligned} \mathsf{E}[Y_{2i(2)} - Y_{2i(1)}] & = \mu + \beta_2 + \gamma_2 + \alpha_{22} + \eta_i - (\mu + \beta_2 + \gamma_1 + \alpha_{21} + \eta_i) \\ & = (\gamma_2 - \gamma_1) + (\alpha_{22} - \alpha_{21}) \\ & = \gamma_2 + \alpha_{12} \end{aligned}$$
+and the estimated mean difference at baseline is 
+$$\begin{aligned} \mathsf{E}[Y_{1i(2)} - Y_{1i(1)}] & = \mu + \beta_1 + \gamma_2 + \alpha_{12} + \eta_i - (\mu + \beta_1 + \gamma_1 + \alpha_{11} + \eta_i) \\ & = (\gamma_2 - \gamma_1) + (\alpha_{12} - \alpha_{11}) \\ & = \gamma_2 \end{aligned}$$
+The estimated mean difference in change-from-baseline is therefore
+$$\begin{aligned} \mathsf{E}[(Y_{1i(2)} - Y_{1i(2)}) - (Y_{2i(1)} - Y_{1i(1)})] & = \mathsf{E}[Y_{1i(2)} - Y_{1i(1)}] -  \mathsf{E}[Y_{1i(2)} - Y_{1i(1)}] \\ & = (\gamma_2 - \gamma_1) + (\alpha_{22} - \alpha_{21}) - (\gamma_2 - \gamma_1) - (\alpha_{12} - \alpha_{11}) \\ & = \alpha_{22} \end{aligned}$$
+Unless $\gamma_2$ is fixed at zero estimates of the difference in mean change from baseline and the difference in estimated mean at EOT will therefore not agree numerically. 
+
+## Fixing baseline treatment differences to zero
+
+Under randomization we know that there cannot be any true mean difference between treatment groups at baseline and it therefore makes sense not to estimate $\gamma_2$ which represents this difference but simply fix it to zero. The resulting model reads
+$$Y_{ti(g)} = \mu + \beta_t + \alpha_{tg} + \eta_i + e_{ti(g)}, \quad e_{i(g)} = [e_{1i(g)}, e_{2i(g)}]^\top \sim N(\mathbf 0, \mathbf{\Sigma}), \quad \mathbf{\Sigma} = \begin{bmatrix} \sigma_1^2 & \sigma_{12} \\ \sigma_{12} & \sigma_2^2 \end{bmatrix} $$
+with the same parameter restrictions for $\beta_t$ and $\alpha_{tg}$ considered above. 
+
+It can be shown that the parameter estimates from this model (identified by a tilde) can be described in terms of the estimates from the general RCT model (identified by a hat):
+$$\begin{aligned} \tilde \mu &= \hat \mu + \hat\gamma_2/2 \\ \tilde\beta_2 &= \hat\beta_2 - \hat\gamma_2 (1 - \hat\phi) / 2 \\ \tilde\alpha_{22} &= \hat\alpha_{22} +  \hat\gamma_2 (1 - \hat\phi) \\ \end{aligned}$$
+
+
+## Mixed-effects model
+
+The general RCT model above can also be expressed as a linear mixed-effects model, ie. a model including random-effects. 
+
+Formally the mixed-effects model is described by the marginal distribution of the random-effect and the conditional distribution of the outcome given observed values of the random effects:
+$$B \sim N(\mathbf 0, \mathbf{\Sigma}_B), \quad Y|B=b \sim N(\mathbf{\mu}_Y, \mathbf{\Sigma}_Y)$$
+where $\mathbf{\Sigma}_B$ and $\mathbf{\Sigma}_Y$ are variance-covariance matrices.
+
+While all mixed-effects models imply certain marginal multivariate normal models (for $Y$) it is not all marginal multivariate normal models which can be expressed as linear mixed-effects models.
+
+The following mixed-effects model can be shown to represent the general RCT (marginal and  bivariate) model above:
+$$Y_{ti(g)} = \mu + \beta_t + \gamma_g + \alpha_{tg} + \eta_i + s_i + e_{ti(g)},  \quad s_i \sim N(0, \sigma_{s}^{2}), \quad e_{ti(g)} \sim N(0, \sigma^2_{e_t})$$
+where $s_i$ is the random-effect for the $i$th subject. 
+
+Here
+$$\mathsf{Var}[Y_{1i}] = \sigma_s^2 + \sigma_{e_1}^2, \quad \mathsf{Var}[Y_{2i}] = \sigma_s^2 + \sigma_{e_2}^2, \quad \mathsf{Cov}[Y_{1i}, Y_{2i}] = \sigma_s^2$$
+and
+$$\mathsf{Corr}[Y_{1i}, Y_{2i}] = \rho = \frac{\sigma_s^2}{\sqrt{\sigma_s^2 + \sigma_{e_1}^2}\sqrt{\sigma_s^2 + \sigma_{e_2}^2}} \begin{cases}  = \frac{\sigma_s^2}{\sigma_s^2 + \sigma^2_e} & \mathrm{if~} \sigma_e = \sigma_{e_1} = \sigma_{2_e}  \\ \approx \frac{\sigma_s^2}{\sigma_s^2 + \tilde\sigma^2_e},~ \tilde\sigma_e = (\sigma_{e_1} + \sigma_{e_2})/2 & \mathrm{if~}  \sigma_{e_1} \approx \sigma_{2_e} \end{cases}$$
+thus the variance-covariance parameters of the bivariate (marginal) model can be identified as
+
+1. $\sigma_1^2 = \sigma_s^2 + \sigma_{e_1}^2$
+1. $\sigma_2^2 = \sigma_s^2 + \sigma_{e_2}^2$
+1. $\sigma_{12} = \sigma_s^2$
+
+In the mixed model the parameter space is further restricted by $\sigma_s \geq 0$ leading to $0 \leq \rho < 1$. Strictly speaking the two models (mixed-effects and multivariate) are therefore not identical: while they will give exactly the same parameter estimates if $\hat\rho \geq 0$, they will no agree if $\hat\rho < 0$ in the bivariate model.
+
+### Constant error variance
+
+If the error variance is not allowed to vary with $t$, ie. $e_{ti(g)} \sim N(0, \sigma_e^2)$, then we have
+
+1. $\sigma_1^2 = \sigma_2^2 = \sigma_{s}^{2} + \sigma^2_{e}$
+1. $\rho = \sigma_s^2/ (\sigma_s^2 + \sigma_{e}^2)$
+
+which is the covariance structure known as _compound symmetry_. 
+
+### Multivisit model - MMRM*
+
+The bivariate model can be trivially extended to more than two visits, ie. to include intermediate visits which is common in for example pharmaceutical RCTs. With $m$ visits the residual variance-covariance matrix is $m\times m$ containing $m(m-1)$ unique variance-covariance parameters. This model is known as the _Mixed Model for Repeated Measurements_ (MMRM, Mallinckrodt et al 2001). 
+
+The MMRM is often used for analysis of pharmaceutical trials in a version conditioning on baseline measurements of the outcome. This version of the model can be formulated both for EOT and CHG values while the general RCT model as outlined above only makes sense as a model for EOT values.
+
+
+## Conditional (ANCOVA) model
+
+The conditional distribution of the EOT value given the observed baseline value now has the form 
+$$\begin{aligned} Y_2|(Y_1 = y_1) & \sim N\left( \mu_2 + \phi (y_1 - \mu_1), \sigma_2^2(1 - \rho^2) \right), \quad \phi = \rho \frac{\sigma_2}{\sigma_1} \\
+& \sim N\left(\mu + \gamma_g + \beta_2 + \alpha_{g2} + \eta_i + \phi (y_1 - \mu - \gamma_g - \eta_i), (\sigma_{s}^{2} + \sigma_{e_2}^2)(1 - \rho^2) \right) \\
+& \sim N\left( [\mu(1-\phi) + \beta_2] + \phi y_1 + [\gamma_g(1-\phi) + \alpha_{g2}] + \eta_i (1- \phi), (\sigma_{s}^{2} + \sigma_{e_2}^2)(1 - \rho^2) \right) \\
+\end{aligned}$$
+
+This is an ANCOVA (ANalysis of COVAriance) model with the following identities:
+
+1. $\mu(1-\phi) + \beta_2$ is the intercept
+1. $\phi$ is the coefficient to the baseline measurement $y_1$
+1. $\gamma_g(1-\phi) + \alpha_{g2}$ is the coefficient for the treatment variable
+1. coefficients to the $\eta_i$-variables will appear scaled by $(1-\phi)$
+1. the residual variance is $(\sigma_{s}^{2} + \sigma_{e_2}^2)(1 - \rho^2)$ which depends on $\sigma_1$ through $\rho$.
+
+Note that interpreting the coefficient for the treatment variable as an estimate of _the treatment effect_ corresponds to assuming $\gamma_g = 0$ for $g=1, 2$.
+
+## A simpler conditional model
+
+Assuming that $\gamma_2 = 0$, constant residual variance and ignoring stratification variables ($\eta_i$) leads to the following simplification of the model above:
+$$Y_{ti(g)} = \mu + \beta_t + \alpha_{tg} + s_i + e_{ti(g)},  \quad s_i \sim N(0, \sigma_{s}^{2}), \quad e_{ti(g)} \sim N(0, \sigma_e^2) $$
+
+This leads to the conditional distribution:
+$$Y_2|(Y_1 = y_1) \sim N\left\{ \tilde\mu + \rho y_1 + \alpha_{g2}, (\sigma_{s}^{2} + \sigma_e^2)(1 - \rho^2) \right\}$$
+where $\tilde\mu = [\mu(1-\rho) + \beta_2]$ is the intercept.
+
+This ANCOVA model has been the pharmaceutical industry standard for analysis of RCTs for many years while implementation in research practice has been slower (Vickers and Altman (2001)).
+
+An aspect of the ANCOVA model is that analysis of $Y_2$ (EOT values) gives _exactly_ the same inference for the treatment effect as using $Z = Y_2 - Y_1$ (change from baseline (CHG) values) as the response. The parameter values for the intercept changes (as the following shows) but estimate and standard error for the treatment effect remain unchanged.
+
+The conditional model has the following expectation
+$$\mathsf{E}[Y_2 | Y_1 = y_1] = \tilde\mu + \rho y_1 + \alpha_{2g}$$
+while a similar model for CHG reads
+$$\mathsf{E}[Y_2 - Y_1 | Y_1 = y_1] = \mathsf{E}[Y_2 | Y_1 = y_1] - y_1 = \tilde\mu^* + \rho^* y_1 + \alpha_{2g}^*$$
+leading to $\tilde\mu^* = \tilde\mu$, $\alpha_{2g}^* = \alpha_{2g}$ and $\rho^* = \rho + 1$ thus all parameters remain the same except that the coefficient the baseline values is one unit higher if CHG values are used as response as compared to if EOT values are used as response.
+
+Without a model framework researchers turn to two-sample $t$-tests for analysis of RCT data which has lead to a debate about whether to base an analysis on EOT or CHG values. The troubling part is not only that these approaches are often inefficient but that they generally give different, sometimes conflicting, answers. 
+
+
+## Marginal models
+
+### Marginal model for EOT values
+
+Taking our starting point in the bivariate normal model the marginal model for $Y_2$ can be written
+$$Y_2 \sim N(\mu_2, \sigma^2_2), \quad \mathrm{where}\quad \mu_2 = \mu + \gamma_g + \beta_2 + \alpha_{g2} + \eta_i$$
+Setting $\tilde\mu = \mu + \beta_2$, ignoring $\eta_i$ and assuming $\gamma_g = 0$ we have
+$$Y_2 \sim N(\tilde\mu + \alpha_{g2}, \sigma^2_2)$$
+which is just a two-sample $t$-test with $\alpha_{2g}$ being the mean difference.
+
+
+### Marginal model for CHG values
+
+The marginal model for CHG values is also univariate normal with mean
+$$\mathsf{E}[Y_2 - Y_1] = \mu_2 - \mu_1 = \mu + \gamma_g + \beta_2 + \alpha_{g2} + \eta - (\mu + \gamma_g + \eta) = \beta_2 + \alpha_{2g}$$
+and variance
+$$\mathsf{Var}[Y_2 - Y_1] = \mathsf{Var}[Y_2] + \mathsf{Var}[Y_1] - 2 \mathsf{Cov}[Y_2, Y_1] = \sigma_2^2 + \sigma_1^2 - 2\rho\sigma_1\sigma_2$$
+we therefore have the following model
+$$Z = (Y_2 - Y_1) \sim N(\beta_2 + \alpha_{2g}, \sigma_z^2), \quad \sigma_z^2 = \sigma_2^2 + \sigma_1^2 - 2\rho\sigma_1\sigma_2$$
+Specifically this also has the form as a two-sample $t$-test with $\alpha_{2g}$ being the mean difference. 
+
+Note that both $\gamma_g$ (and $\mu$ as well) cancels out in the model for CHG values thus inference is _conditioned_ on baseline differences between treatment groups $\gamma_g$. In the marginal model for EOT values, on the other hand, the treatment effect $\gamma_g + \alpha_{2g}$ is confounded by (often random) baseline differences between treatment groups which may in fact be substantial if the study is not large and the randomization less than perfect. 
+
+This is perhaps the main reason to prefer analysis of CHG over EOT values (I haven't seen this point being made explicitly in the literature before but perhaps I just missed it), though of course the bivariate or conditional models are much preferred over the marginal ones. 
+
+Assuming equal variances, $\sigma_2 = \sigma_1$ gives
+$$\sigma_z^2 = 2\sigma_2^2(1-\rho)$$
+thus $\sigma_z = \sigma_2$ if $\rho = 1/2$ and in general
+
+1. $\sigma_z < \sigma_2$ if $\rho > 1/2$
+1. $\sigma_z = \sigma_2$ if $\rho = 1/2$
+1. $\sigma_z > \sigma_2$ if $\rho < 1/2$
+
+### Unequal variance for CHG values
+
+The marginal model for EOT values is indifferent to the value of $\sigma_1$ but in the marginal model for CHG values the variance is $\sigma_z^2 = \sigma_2^2 + \sigma_1^2 - 2\rho\sigma_1\sigma_2$ which depends on $\sigma_1$. 
+
+Setting again $\sigma_2 = p \sigma_1$ for $p > 0$ (often $p > 1$) we have
+$$\sigma_z^2 = \sigma_2^2(1 + p^{-2} - 2 \rho / p)$$
+which shows that 
+
+1. $\sigma_z^2 < \sigma_2^2$ when $\frac{\sigma_1}{\sigma_2} < 2\rho$ (common)
+1. $\sigma_z^2 = \sigma_2^2$ when $\frac{\sigma_1}{\sigma_2} = 2\rho$ (simple)
+1. $\sigma_z^2 > \sigma_2^2$ when $\frac{\sigma_1}{\sigma_2} > 2\rho$ (unusual)
+
+```{r, eval=FALSE, include=FALSE}
+s2 <- 1; rho <- .7
+p <- c(1.4, 1/1.4, .5)
+1/p - 2*rho
+s2 * (1 + 1/(p^2) - 2 * rho / p)
+```
+
+
+Note that when $\rho > 0.5$, which is most common, we will almost always be in case 1 thus this is the most important situation to consider. Taking $p=1$ and $\rho=1/2$ lands us in case 2 which is probably the simplest scenario.
+
+# Data examples in **R**
+
+For simulations and analyses we need to load the following packages:
+```{r, message=FALSE}
+# load packages:
+library(mvtnorm)    # to simulate data
+library(data.table) # to manipulate data
+library(lmerTest)   # to fit linear mixed models
+library(nlme)       # to fit general multivariate models
+```
+
+
+## Example data
+
+In this section we will be considering example data simulated from a thought-up RCT having $n=100$ subjects in each treatment arm. We will simulate from a version of the general model above with  $\alpha_{2g} = .4$, $\sigma_2 = 1$, $p=1.1$, (thus $\sigma_1 = \sigma_2 / p \approx 0.91$), $\rho=0.7$ and all remaining parameters being zero.
+
+Simulate data from general model:
+```{r}
+n <- 100
+rho <- 0.7
+p <- 1.1
+sig2 <- 1
+sig1 <- sig2/p
+sig12 <- rho*sig1*sig2
+Sigma <- rbind(c(sig1^2, sig12),
+               c(sig12, sig2^2))
+# sigs <- sig2*sqrt(rho)
+# sige <- sig2*sqrt(1-rho)
+mu <- 0; beta <- c(0, 0); gamma <- c(0, 0); alpha <- c(0, 0, 0, 0.4);
+dlong <- data.table(id = factor(rep(1:(2*n), each=2)),
+                    time = factor(rep(c("bl", "eot"), 2*n)),
+                    group = factor(rep(c("plc", "trt"), each=2*n)))
+                    # subgrp = factor(rep(rep(c("female", "male"), each=n/2), 2)))
+X_alpha <- model.matrix(~ 0 + time:group, data=dlong)
+mean_vec <- c(X_alpha %*% alpha)
+set.seed(290980)
+resid <- c(t(rmvnorm(2*n, c(0, 0), Sigma)))
+dlong[, y := mean_vec + resid]
+# Cast to wide format:
+d <- dcast(dlong, id + group ~ time, value.var = "y")
+d[, chg := eot - bl]
+d[]
+```
+
+Here the mean structure is given by:
+```{r}
+ftable(tapply(mean_vec, dlong[, .(time, group)], mean))
+```
+
+## General model
+
+Using the `gls` function from the `nlme` package we can fit the general bivariate model while allowing for unequal residual variances for the two treatment arms:
+```{r}
+fmg2 <- gls(y ~ time * group, data=dlong, 
+            correlation = corCompSymm(form = ~ 1| id),
+            weights = varIdent(form=~1|time))
+```
+
+The fitted model is summarized with 
+```{r}
+summary(fmg2)
+```
+and the estimated residual variance-covariance matrix is (the `getCovMat` function is defined in the appendices):
+```{r getCovMat_function, include=FALSE}
+getCorMat <- function(gls_object, data=NULL) {
+  stopifnot(!is.null(data))
+  x <- gls_object
+  cor.struct <- x$modelStruct$corStruct
+  if(is.null(cor.struct)) {
+    message("no correlation structure in model")
+    return(numeric(0L))
+  }
+  call <- paste0(class(cor.struct)[1], "(value=", 
+                 deparse(as.vector(coef(cor.struct, unconstrained = FALSE)),
+                         width.cutoff = 500L), ", form=", 
+                 paste(attr(cor.struct, "formula"), collapse=" "), ")")
+  corObj <- eval.parent(parse(text=call))
+  corMatrix(Initialize(corObj, data))[[1]]
+}
+getVarMat <- function(gls_object, matrix=TRUE) {
+  x <- gls_object
+  var.struct <- x$modelStruct$varStruct
+  if(is.null(var.struct)) return(x$sigma^2)
+  if(class(var.struct)[1] != "varIdent") {
+    message(paste0("Cannot extract variance-matrix from", 
+                   " non-varIdent structures. Returning sigma"))
+    return(x$sigma^2)
+  }
+  rel.var <- c(1, coef(x$modelStruct$varStruct, unconstrained = FALSE))
+  res <- (rel.var * x$sigma)^2
+  if(matrix) res <- diag(c(res))
+  res
+}
+getCovMat <- function(gls_object, data) {
+  ## Extract the variance-covariance matrix of a linear model with 
+  ## structured error variance-covariance matrix
+  x <- gls_object
+  corMat <- getCorMat(x, data)
+  varMat <- sqrt(getVarMat(x, matrix=FALSE))
+  if(length(corMat) == 0) return(varMat)
+  if(length(varMat) == 1) corMat * rep(varMat^2, ncol(corMat)) else
+    diag(c(varMat)) %*% corMat %*% diag(c(varMat))
+}
+```
+```{r}
+(covmat <- getCovMat(fmg2, data=dlong[time != "chg"]))
+```
+corresponding to the parameter estimates
+```{r}
+(rhohat <- cov2cor(covmat)[1, 2])
+(phat <- sqrt(covmat[2, 2] / covmat[1, 1]))
+```
+
+Observe that the displayed $p$-value for treatment effect is slightly inaccurate since it actually has 198 rather than 396 degrees of freedom assumed by the software.
+
+For convenience we collect the values of the parameters used in the simulation as well as the parameter estimates here:
+```{r, echo=FALSE}
+nms <- c("mu", "beta_2", "gamma_g", "alpha_2g", "sigma_s", "sigma_e1", 
+         "sigma_1", "sigma_2", "sigma_12", "rho", "p", "phi")
+sig_e1 <- sqrt(covmat[1, 1] - covmat[1, 2])
+parm <- data.table(parameter=nms, 
+                   sim_value = c(0, 0, 0, 0.4, sqrt(sig12), sqrt(sig1^2 - sig12),
+                                 sig1, sig2, sig12, rho, p, rho*p),
+                   estimate=c(coef(fmg2), sqrt(covmat[1, 2]), sig_e1, sqrt(covmat[1, 1]),
+                              sqrt(covmat[2, 2]), covmat[1, 2], rhohat, phat, rhohat*phat))
+for (i in 1:nrow(parm)) assign(parm$parameter[i], value = parm$estimate[i])
+parm
+```
+
+This general RCT model can also be fitted as a simple multivariate linear model:
+```{r}
+fmu <- lm(cbind(bl, eot) ~ group, data=d)
+```
+with coefficient matrix (simple transformation of the parameter estimates found above)
+```{r}
+coef(fmu)
+```
+and residual variance-covariance matrix
+```{r}
+crossprod(fmu$residuals) / (2*n -2)
+```
+as we also found using `lme` above.
+
+
+```{r, eval=FALSE, include=FALSE}
+head(d)
+dlong
+
+fmu <- lm(cbind(bl, eot) ~ group, data=d)
+names(fmu)
+names(summary(fmu))
+coef(fmu)
+coef(summary(fmu))
+
+
+
+
+manova(fmu)
+summary(manova(fmu))
+coef(manova(fmu))
+sqrt(4.4453)
+
+?manova
+
+#########
+(covmat_b <- getCovMat(fmg2b, data=dlong[time != "chg"]))
+
+covmat / covmat_b
+
+sigma_2^2
+
+198 / 200
+196/197
+
+200 / 199
+
+sigma_1
+
+n*gamma_g^2 / 4
+
+0.5928 / 0.587
+0.1414839/0.1401009
+
+SSe <- sigma_1^2 * 98
+
+(SSe + n*gamma_g^2 / 2) / SSe
+anova(fmg2)
+anova(fmg2b)
+
+
+mu + gamma_g/2
+gamma_g * (1 - phi) + alpha_2g
+
+beta_2 - gamma_g/2
+alpha_2g - 2*beta_2
+mu * (1 - phi) + beta_2
+
+
+ftable(tapply(mean_vec, dlong[, .(time, group)], mean))
+addmargins(m1 <- tapply(fitted(fmg2), dlong[, .(time, group)], mean))
+addmargins(m2 <- tapply(fitted(fmg2b), dlong[, .(time, group)], mean))
+
+m1[2, 2] - m1[2, 1]
+m2[2, 2] - m2[2, 1]
+
+
+addmargins(M1 <- rbind(c(mu, mu+ gamma_g),
+      c(mu + beta_2, mu + beta_2 + gamma_g + alpha_2g )))
+
+addmargins(M2 <- rbind(c(mu + gamma_g/2, mu + gamma_g/2),
+      c(mu + beta_2, mu + gamma_g + beta_2 + alpha_2g)))
+
+M1[2, 2] - M1[2, 1]
+M2[2, 2] - M2[2, 1]
+
+mu_t <- mu + gamma_g/2
+beta_t <- beta_2 - gamma_g * (1 - phi)/2
+alpha_t <- gamma_g * (1 - phi) + alpha_2g
+gamma_g + alpha_2g
+
+addmargins(rbind(c(mu_t, mu_t),
+                 c(mu_t + beta_t, mu_t + beta_t + alpha_t)))
+
+2*mu + 2*beta_2 + gamma_g + alpha_2g
+2*mu_t + 2*beta_t + alpha_t
+
+2*(mu + gamma_g/2) + 2*beta_t + gamma_g * (1 - phi) + alpha_2g
+
+2*mu + gamma_g * (2 - phi) + 2*beta_t + alpha_2g
+2*mu + 2*beta_2 + gamma_g + alpha_2g
+
+
+gamma_g * (1 - phi) + 2*beta_t - 2*beta_2
+beta_t
+beta_2 - gamma_g * (1 - phi)/ 2
+
+4*mu + 2*gamma_g + 2*beta_2 + alpha_2g
+
+fmm1 <- lme(y ~ time + timegroup, data=dlong,
+            random = ~1|id,
+            weights = varIdent(form=~1|time))
+summary(fmm1)
+
+###########
+dlong
+
+fm0 <- lm(y ~ time + group + timegroup, data=dlong)
+fm0 <- lm(y ~ time * group, data=dlong)
+summary(fm0)
+(an0 <- anova(fm0))
+fm1 <- lm(y ~ time + timegroup, data=dlong)
+summary(fm1)
+(an1 <- anova(fm1))
+sum(an0[2:3, "Sum Sq"])
+sum(an1[, "Sum Sq"])  
+
+(b0 <- coef(summary(fm0)))
+(b1 <- coef(summary(fm1)))
+
+sum(b0[3:4, 1])
+```
+
+
+### Setting baseline differences to zero
+
+We can fit the general RCT model while restricting the baseline differences $\gamma_2 - \gamma_1$ to zero as follows:
+
+```{r}
+dlong[, timegroup := ifelse(time == "eot" & group == "trt", 
+                             "eot_trt", "bl")]
+fmg2b <- gls(y ~ time + timegroup, data=dlong, 
+            correlation = corCompSymm(form = ~ 1| id),
+            weights = varIdent(form=~1|time))
+coef(summary(fmg2b))
+```
+
+The treatment difference in this model can be expressed in terms of the parameters of the general RCT model as: $\hat\gamma_2(1 - \hat\phi) + \hat\alpha_{2g}$
+```{r}
+gamma_g * (1 - phi) + alpha_2g
+```
+and equals the treatment difference estimate from an ANCOVA.
+
+## Mixed-effects model
+
+We can also fit the general RCT model as a mixed-effects model:
+```{r}
+fmm1 <- lme(y ~ time * group, data=dlong,
+            random = ~1|id,
+            weights = varIdent(form=~1|time))
+stopifnot(isTRUE(all.equal(fixef(fmm1), coef(fmg2))))
+```
+but with a different parameterisation of the variance-covariance structure:
+```{r}
+VarCorr(fmm1)
+```
+
+```{r, eval=FALSE, include=FALSE}
+library(ordinal)
+dlong[, ycat := as.factor(findInterval(y, vec=(-1):1))]
+dlong[, table(ycat)]
+
+fm1 <- clmm(ycat ~ group * time + (1 | id), data=dlong)
+fm1 <- clmm(ycat ~ group * time + (0 + time | id), data=dlong)
+summary(fm1)
+
+fm2 <- clm(ycat ~ group*time, nominal = ~ time, data=dlong)
+summary(fm2)
+```
+
+Note however that the covariance parameter in the bivariate model corresponds to the subject-variance parameter in this model, $\sigma_{12} = \sigma_s^2$, 
+and that the sum of variances ($\sigma_s^2 + \sigma_{e_1}^2$) equals $\sigma_1^2$ from the bivariate model (`sigma_1`):
+```{r}
+sqrt(sum(as.numeric(VarCorr(fmm1)[, 1])))
+```
+
+
+### Constant error variance
+
+The model with constant error variance can be fitted by simply removing the `weights` term: 
+```{r}
+fmm2 <- lme(y ~ group * time, data=dlong,
+            random = ~1|id)
+```
+
+The model can also be fitted with `lmer` from the **lme4** package using **lmerTest** to provide $p$-values:
+```{r}
+fmm3 <- lmer(y ~ group * time + (1|id), data=dlong)
+stopifnot(isTRUE(all.equal(fixef(fmm2), fixef(fmm3))))
+print(summary(fmm3), corr=FALSE)
+```
+Observe that **lmerTest** correctly determines the degrees of freedom to 198 for the $t$-test of the treatment effect.
+
+Since `lmer` does not allow structural error variance the general model cannot be fitted with `lmer`.
+
+## Conditional models
+
+The conditional model for EOT using BL as a covariate is fitted with:
+```{r}
+summary(fm_eot <- lm(eot ~ bl + group, data=d))
+```
+
+In this model the estimate of $\hat\phi = \hat\rho \cdot \hat\sigma_2 / \hat\sigma_1$ is
+```{r}
+(phihat <- rho * sigma_2 / sigma_1)
+```
+equals the coefficient for the baseline variable, `bl`. The treatment difference, `grouptrt` can be expressed in terms of the parameter estimates from the general model as $\hat\gamma_2(1 - \hat\phi) + \hat\alpha_{2g}$
+```{r}
+gamma_g * (1 - phihat) + alpha_2g
+```
+which equals the treatment estimate from the general RCT model in which we set $\gamma_2 = 0$. Further, the intercept is $\hat\mu(1 - \hat\phi) + \hat\beta_2$:
+```{r}
+mu*(1 - phihat) + beta_2
+```
+and the residual standard deviation, $\sigma$ is (approximately):
+```{r}
+sqrt((sigma_2^2)*(1 - rho^2))
+sigma(fm_eot) # reference
+```
+The small difference here is due to a difference in degrees of freedom for the error variance -- the sums of squares can be recovered accurately:
+```{r}
+r <- resid(fmg2)
+r <- r[names(attr(r, "std")) == "eot"]
+sum(r^2) * (1 - rho^2) 
+sum(resid(fm_eot)^2)
+```
+
+The conditional model for CHG gives the following parameter estimates:
+```{r}
+fm_chg <- lm(chg ~ bl + group, data=d)
+coef(summary(fm_chg))
+```
+
+Here we see that the coefficient for `bl` equals the coefficient for `bl` in `fm_eot` minus 1:
+```{r}
+phihat - 1
+```
+and all other parameter estimates (including standard errors and $p$-values) are identical to those for the EOT values.
+
+The residual standard deviation in the conditional model for CHG is the same as in the conditional model for EOT:
+```{r}
+sigma(fm_chg)
+```
+
+## Marginal models
+
+We can fit the marginal model as special case of a linear model (using `lm`) or directly use a two-sample $t$-test - here for EOT values:
+```{r}
+summary(lm(eot ~ group, data=d))
+keep <- c("statistic", "p.value")
+do.call(cbind, t.test(eot ~ group, data=d)[keep])
+```
+
+Here $\hat\gamma_g + \hat\alpha_{2g}$ shows up as the mean difference:
+```{r}
+gamma_g + alpha_2g
+```
+and $\hat\sigma_2$ is:
+```{r}
+sigma_2
+```
+
+The marginal model for the CHG values gives:
+```{r}
+summary(lm(chg ~ group, data=d))
+do.call(cbind, t.test(chg ~ group, data=d)[keep])
+```
+
+Here $\hat\beta_2$ shows up as the intercept:
+```{r}
+beta_2
+```
+and $\hat\alpha_{2g}$ shows up as the coefficient to the treatment effect.
+
+The residual standard deviation is $\sqrt{ \sigma_2^2 + \sigma_1^2 - 2\rho \sigma_2 \sigma_1}$:
+```{r}
+sqrt(sigma_2^2 + sigma_1^2 - 2* rho * sigma_1 * sigma_2)
+```
+
+Note how estimate and standard error are exactly the same as for the general model.
+
+# Perspectives*
+
+The general RCT model and the simpler models derived from it that we have discussed in the note can be extended in numerous ways. Often models for RCTs are kept relatively simple in the sense that there is no need to adjust for a long array of confounders. Some extensions not discussed in this note are, however, often relevant to consider:
+
+1. The randomization procedure is sometimes, often due to practical constraints or convenience, restricted in particular ways. Common examples include stratified randomisation procedures and cluster-randomised trials. These aspects necessitate that stratification or cluster variables be handled in the model.
+1. In many cases it is of relevance to consider more than one version of the active treatment, eg. in dose-response studies. This is naturally handled by letting the treatment factor assume levels for the treatment arms and by comparing each active arm with placebo in $t$-tests.
+1. The models discussed here represent the simplest version of a longitudinal trial with only two visits -- in many studies there are several intermediate visits. The general RCT model extends naturally to multiple visits as briefly mentioned in the section on the mixed model for repeated measurements. While designs with intermediate visits adds computational strains on the computations they have advantages in terms of handling drop-outs and they can also have practical advantages.
+
+
+In addition to model _extensions_ there are a number of topics related to the analysis of RCTs which are often of considerable importance:
+
+1. The most important aspect not given explicit treatment in this note is the issue of subject drop-out or missing values. Even moderate drop-outs can seriously compromise the integrity of an RCT -- the validity of an RCT rests on being able to compare treatment groups as they were randomized but if subjects drop out before the final assessment this is not possible any more. The main purpose of methods to handle missing values is to enable valid inference for the treatment difference even if final assessments are not available on some subjects. Popular methods for handling of missing values include the MMRM which was briefly mentioned but _multiple imputation_ (MI) methods are also popular. 
+1. Closely related to the topic of missing values is that of _estimands_. An estimand is the quantity which is to be estimated in light of post-randomization events. Examples of  post-randomisation events include subject drop-out, use of rescue medication and much more. The MMRM entails a particular estimand and MI methods allow for a wide array of different estimands. The choice of estimand -- whether deliberately chosen or a happenstance consequence of the chosen statistical model, can have substantial impact on the size of the estimated treatment effect.
+1. Counter-factual theory is usually considered for observational studies with the purpose of drawing _causal inference_, but the foundations for these topics is closely related to randomised trials.
+1. This note assumes that interest is in comparison of an active treatment arm with placebo. This is often the case when the hypothesis is one of _superiority_; in other situations interest centers around hypothesis of _equivalence_ or _non-inferiority_ which often leads to trials with active comparator arms rather than placebo arms.
+1. Estimated means (also known as LS-means, marginal, ao.) are useful as model-based supplements to observed means. A wide variety of estimated means can be computed and they all have their own interpretation. In the context of RCTs they have to be computed in such a way that they reflect the estimated treatment effects and are relevant and valid for all randomised subjects. 
+1. Planning of RCTs are usually based on power and sample size computations. It is inconvenient to consider power in the context of the general RCT directly due to the complexities involved, but the connection of this model to the simple marginal models and two-sample $t$-tests can be utilized so that power and sample size tools for $t$-tests can be put to used to provide power in wider generality. Further, these connections facilitate a conceptual understanding of the effects of various changes to the design on power and sample size.
+
+
+# References
+
+1. Bendix Carstensen (2013) A note on repeated measures analysis and conditioning on baseline measurement. Retrieved from [https://bendixcarstensen.com/Notes/rm.pdf](https://bendixcarstensen.com/Notes/rm.pdf) April 2020.
+1. CH Mallinckrodt, WS Clark and SR David (2001) Accounting for dropout bias using mixed-effects models. _Journal of Biopharmaceutical Statistics_, 11, p. 9-21.
+1. Andrew J Vickers and Douglas G Altman. Analysing controlled trials with baseline and follow-up measurements. _British Medical Journal_, 323:1123–1124, November 2001.
+
+# Appendices
+
+## `getCovMat` function
+
+```{r, getCovMat_function, echo=TRUE, eval=FALSE}
+```
+
+## Version of **R** and **R**-packages
+
+```{r sessionInfo}
+sessionInfo()
+```
+
