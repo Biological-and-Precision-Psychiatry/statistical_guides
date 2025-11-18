@@ -526,3 +526,11 @@ dsurv3 <- rbind(dsurv, dsurv2)
 ggplot(dsurv3, aes(time, surv, color=adjusted)) + geom_step()
 ```
 
+
+## Appendix
+
+**R** session info:
+```{r}
+sessionInfo()
+```
+
