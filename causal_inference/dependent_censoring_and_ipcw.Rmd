@@ -1,7 +1,7 @@
 ---
 title: "Methods to Adjust for Dependent Censoring using Inverse Probability of Censoring Weighting"
 author: "Rune H B Christensen"
-date: "11 October 2025"
+date: "11 October 2025 -- version 1.0"
 output:
   pdf_document:
     toc: true
