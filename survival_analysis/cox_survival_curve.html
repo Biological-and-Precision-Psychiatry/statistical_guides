@@ -11,7 +11,6 @@
 
 <meta name="author" content="Rune H B Christensen" />
 
-<meta name="date" content="2025-10-26" />
 
 <title>Survival Estimation with Proportional Hazards Models</title>
 
@@ -353,7 +352,7 @@ display: none;
 <h1 class="title toc-ignore">Survival Estimation with Proportional
 Hazards Models</h1>
 <h4 class="author">Rune H B Christensen</h4>
-<h4 class="date">26 October 2025</h4>
+<h4 class="date">26 October 2025 – version 1.2</h4>
 
 </div>
 
@@ -619,9 +618,9 @@ c(x=x, y=y, z=z)</code></pre>
 <p>Because <span class="math inline">\(2^{100} \approx 10^{30}\)</span>
 the error in the computational representation of the numbers will be
 around <span class="math inline">\(10^{15}\)</span>. This shows up if we
-take the difference between the numbers <span class="math inline">\(2^x\)</span>, <span class="math inline">\(10^y\)</span>, and <span class="math inline">\(e^z\)</span>. These numbers are identical, but
-because the computer only has around 16 digits to work with, the numbers
-are represented with error:</p>
+take the difference between the numbers <span class="math inline">\(2^x\)</span>, <span class="math inline">\(10^y\)</span>, and <span class="math inline">\(e^z\)</span>. These numbers are mathematically
+identical, but because the computer only has around 16 digits to work
+with, the numbers are represented with error:</p>
 <pre class="r"><code>c(Diff_xy = 2^x - 10^y, Diff_xz = 2^x - exp(z))</code></pre>
 <pre><code>##       Diff_xy       Diff_xz 
 ##  3.659175e+15 -2.251800e+15</code></pre>
@@ -993,7 +992,7 @@ print(plotdata, digits=3)</code></pre>
 centered covariates <span class="math inline">\(H_z(t; x)\)</span> and
 <code>surv</code> is <span class="math inline">\(\exp[-H_z(t;
 x)]\)</span>. We have previously used <code>basehaz</code> to compute
-the cumulative hazard, and indeed the same number are produced by this
+the cumulative hazard, and indeed the same numbers are produced by this
 function:</p>
 <pre class="r"><code>cumhaz &lt;- basehaz(fm, centered = TRUE)$hazard
 cbind(cumhaz, surv=exp(-cumhaz)) |&gt; signif(3)</code></pre>
@@ -1144,21 +1143,21 @@ print(dsurv, topn = 3)</code></pre>
 with set values of the covariates sex and age. If, instead, we are
 interested in a survival curve representing a population-average, we
 need a <em>marginal</em> survival curve.</p>
-<p>A standard Kaplan-Meier curve is a option, but that curve is
+<p>A standard Kaplan-Meier curve is an option, but that curve is
 unadjusted for the covariates. Another option is a survival curve for a
 set of covariates set to their average value similar to that produced by
 <code>survfit</code> when the <code>newdata</code> argument is not set.
-This method know as the <em>average covariate method</em> has serious
+This method, known as the <em>average covariate method</em>, has serious
 disadvantages (cf. <a href="https://doi.org/10.1093/oxfordjournals.aje.a008670">Nieto and
 Coresh, 1996</a>) and is recommended against in numerous texts. A better
 option is to standardize the survival curves to the distribution of
 covariates in the population of interest. Usually the population of
 interest is taken to be the study population and we will illustrate that
 in the following.</p>
-<p>First we extract the survival curves for each subject in the study
+<p>First, we extract the survival curves for each subject in the study
 population (8 subjects in our case) and then average the survival
 probability at each time point over the population. We do that by taking
-the row-sums of the matrix of survival curves, <code>surv</code>.</p>
+the row-means of the matrix of survival curves, <code>surv</code>.</p>
 <pre class="r"><code>sfm4 &lt;- survfit(fm, newdata = dt) |&gt; survfit0()
 dsurv &lt;- with(sfm4, cbind(data.table(
   n, time, n.risk, n.event, surv = rowMeans(surv), adjusted=&quot;yes&quot;)))</code></pre>

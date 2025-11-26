@@ -1,7 +1,7 @@
 ---
 title: "Survival Estimation with Proportional Hazards Models"
 author: "Rune H B Christensen"
-date: "26 October 2025"
+date: "26 October 2025 -- version 1.2"
 output:
   pdf_document:
     toc: true
@@ -155,7 +155,7 @@ y <- log10(2) * x
 z <- log(2) * x
 c(x=x, y=y, z=z)
 ```
-Because $2^{100} \approx 10^{30}$ the error in the computational representation of the numbers will be around $10^{15}$. This shows up if we take the difference between the numbers $2^x$, $10^y$, and $e^z$. These numbers are identical, but because the computer only has around 16 digits to work with, the numbers are represented with error:
+Because $2^{100} \approx 10^{30}$ the error in the computational representation of the numbers will be around $10^{15}$. This shows up if we take the difference between the numbers $2^x$, $10^y$, and $e^z$. These numbers are mathematically identical, but because the computer only has around 16 digits to work with, the numbers are represented with error:
 ```{r}
 c(Diff_xy = 2^x - 10^y, Diff_xz = 2^x - exp(z))
 ```
@@ -377,7 +377,7 @@ To prepare for plotting the survival curve, we can extract some of the relevant 
 plotdata <- with(sfm, data.table(time, n.risk, n.event, cumhaz, surv))
 print(plotdata, digits=3)
 ```
-Here `cumhaz` is the cumulative hazard for the mean centered covariates $H_z(t; x)$ and `surv` is $\exp[-H_z(t; x)]$. We have previously used `basehaz` to compute the cumulative hazard, and indeed the same number are produced by this function:
+Here `cumhaz` is the cumulative hazard for the mean centered covariates $H_z(t; x)$ and `surv` is $\exp[-H_z(t; x)]$. We have previously used `basehaz` to compute the cumulative hazard, and indeed the same numbers are produced by this function:
 ```{r}
 cumhaz <- basehaz(fm, centered = TRUE)$hazard
 cbind(cumhaz, surv=exp(-cumhaz)) |> signif(3)
@@ -506,9 +506,9 @@ ggplot(dsurv, aes(time, surv, color=sex)) + geom_step() +
 
 The survival curves obtained in the last section were _conditional_ curves; they corresponded to particular individuals with set values of the covariates sex and age. If, instead, we are interested in a survival curve representing a population-average, we need a _marginal_ survival curve.
 
-A standard Kaplan-Meier curve is a option, but that curve is unadjusted for the covariates. Another option is a survival curve for a set of covariates set to their average value similar to that produced by `survfit` when the `newdata` argument is not set. This method know as the _average covariate method_ has serious disadvantages (cf. [Nieto and Coresh, 1996](https://doi.org/10.1093/oxfordjournals.aje.a008670)) and is recommended against in numerous texts. A better option is to standardize the survival curves to the distribution of covariates in the population of interest. Usually the population of interest is taken to be the study population and we will illustrate that in the following.
+A standard Kaplan-Meier curve is an option, but that curve is unadjusted for the covariates. Another option is a survival curve for a set of covariates set to their average value similar to that produced by `survfit` when the `newdata` argument is not set. This method, known as the _average covariate method_, has serious disadvantages (cf. [Nieto and Coresh, 1996](https://doi.org/10.1093/oxfordjournals.aje.a008670)) and is recommended against in numerous texts. A better option is to standardize the survival curves to the distribution of covariates in the population of interest. Usually the population of interest is taken to be the study population and we will illustrate that in the following.
 
-First we extract the survival curves for each subject in the study population (8 subjects in our case) and then average the survival probability at each time point over the population. We do that by taking the row-sums of the matrix of survival curves, `surv`. 
+First, we extract the survival curves for each subject in the study population (8 subjects in our case) and then average the survival probability at each time point over the population. We do that by taking the row-means of the matrix of survival curves, `surv`. 
 ```{r}
 sfm4 <- survfit(fm, newdata = dt) |> survfit0()
 dsurv <- with(sfm4, cbind(data.table(
