@@ -1,7 +1,7 @@
 ---
 title: "Methods to Adjust for Dependent Censoring using Inverse Probability of Censoring Weighting"
 author: "Rune H B Christensen"
-date: "11 October 2025 -- version 1.0"
+date: "11 October 2025 -- version 1.1"
 output:
   pdf_document:
     toc: true
@@ -12,7 +12,7 @@ editor_options:
 ---
 
 
-```{r, message=FALSE, echo=FALSE}
+```{r, message=FALSE, warning=FALSE, echo=FALSE}
 # library(ggplot2)
 library(data.table)
 # library(readxl)
@@ -270,21 +270,93 @@ fm_cens <- coxph(Surv(time = tstart, time2 = time, event = cens) ~ z,
 summary(fm_cens)
 ```
 
-We loop over each row of the counting process dataset `dcp2` and use `survfit` to estimate the survival curve for each value of `z`. Then we use the `summary` method for `survfit` objects to get the survival probability for a specific time. Here we want the probability of remaining uncensored at the _start_ of each time interval so we specify `tstart` in the `times`-argument of `summary`. The probabilities are all saved to a variable `P_uncens` in the `dcp2` dataset:
+The probability of remaining uncensored corresponds to the survival probability estimated in a model for the censoring process. When we allow the censoring process to depend on covariates there may be a unique covariate setting for each individual, for example each individual may have a unique combination of age, bmi etc. We therefore have to consider a survival curve for each covariate setting, corresponding to each of the individuals in the dataset. Furthermore, we have to pick out the point on the survival curve corresponding the time at the start of each interval in the dataset because we are interested in the probability of being uncensored at the start of each interval. That is, each row of the dataset `dcp2` corresponds to a covariate setting represented by `z` and a time interval represented by the start of the interval `tstart` and the end of the interval `time`. 
+
+Conceptually, the simplest solution is therefore to loop over each row of the counting process dataset `dcp2` and use `survfit` to estimate the survival curve for each value of `z`. Then use the `summary` method for `survfit` objects to get the survival probability for a specific time. Here we want the probability of remaining uncensored at the _start_ of each time interval so we specify `tstart` in the `times`-argument of `summary`. The probabilities are all saved to a variable `P_uncens` in the `dcp2` dataset:
 ```{r}
 dcp2$P_uncens <- sapply(1:dcp2[, .N], function(i) {
-  sf_fm_cens <- survfit(fm_cens, newdata = dcp2[i], stype = 2)
+  sf_fm_cens <- survfit(fm_cens, newdata = dcp2[i])
   summary(sf_fm_cens, times = dcp2[i, tstart])$surv
 })
 ```
 
-Notes:
+While this code is conceptually simple and does what we need, it is also unnecessarily computationally intensive because it fits the entire survival curve for each subject while we only need one point on the survival curve; the point corresponding to `tstart`.
 
-- Because the survival curve of subjects with the same value of `z` is the same we didn't need to fit a survival curve for each row of `dcp2`, however, in settings with continuous covariates often subjects will have a unique covariate vector and it will be needed.
-- We used the option `stype = 1` to use a Kaplan-Meier type estimator of survival. The default option (`stype = 2`) exponentiates the cumulative hazard instead and leads to slightly different estimates of `P_uncens` and therefore also different survival estimates.
+Recall that the survival probability at time $t$ for a subject with covariate settings $x_i$ can be written:
+$$S(t, x_i) = \exp[-H_0(t) \exp(x_i^\top \beta)]$$
+This is essentially also how `survfit` computes survival estimates by default. An argument `stype` can be set to `1` in `survfit` to obtain a Kaplan-Meier type survival curve instead, or, as the manual for `survfit` says; a 'direct' estimation of the survival curve.
+
+We can therefore compute the cumulative baseline hazard $H_0(t)$ (denoted `hazard`) for all time points:
+```{r}
+H0 <- basehaz(fm_cens, centered = FALSE) |> as.data.table()
+H0
+```
+and combine it with the linear predictor (`lp`), $x_i^\top \beta$ computed for each row of the dataset:
+```{r}
+dcp2[, lp := predict(fm_cens, type="lp", reference = "zero")]
+dcp2[, .(tstart, time, id, z, lp)] |> head(3) |> print(digits=5) 
+```
+We now merge the cumulative baseline hazard onto `dcp2` while matching on `tstart` to evaluate the survival probability $S(t, x_i)$ for the $i$th row of the dataset at the time `tstart`:
+```{r}
+setnames(H0, "hazard", "cumhaz")
+dcp2 <- merge(dcp2, H0, by.x="tstart", by.y="time", all.x=TRUE, sort = FALSE)
+dcp2[, P_uncens2 := fifelse(is.na(cumhaz), 1, exp(-cumhaz * exp(lp)))]
+dcp2[, .(tstart, time, id, z, lp, cumhaz, P_uncens, P_uncens2)] |> 
+  head(5) |> print(digits=5) 
+```
+Note that we had to handle cases where `tstart` is `0` separately. These cases lead to `NA` in `cumhaz` because there is no cumulative baseline hazard for time 0, however, by definition everybody is uncensored at time zero so the probability of being uncensored at time zero is simply one for everybody regardless of covariate settings.
+
+As a further refinement we can avoid the potentially numerically unstable approach of computing both the baseline cumulative hazard and the linear predictor using zero as a reference point as follows:
+```{r}
+H0 <- basehaz(fm_cens) |> as.data.table()
+setnames(H0, "hazard", "cumhaz")
+dcp2 <- merge(dcp2[, -"cumhaz"], H0, by.x="tstart", by.y="time", all.x=TRUE, 
+              sort = FALSE)
+dcp2[, lp := predict(fm_cens, type="lp")]
+dcp2[, P_uncens3 := fifelse(is.na(cumhaz), 1, exp(-cumhaz * exp(lp)))]
+dcp2[, .(tstart, time, id, z, lp, cumhaz, P_uncens, P_uncens2, P_uncens3)] |> 
+  head(5) |> print(digits=5) 
+```
+Because applying the approximate mean centered covariates is the default in both `basehaz` and the `predict` method, we simply dropped the arguments to these functions. For further details and background, see the note on Cox survival curves available [here](https://github.com/Biological-and-Precision-Psychiatry/statistical_guides/blob/main/survival_analysis/cox_survival_curve.pdf). 
+
+
+```{r temp, eval=FALSE, include=FALSE}
+dcp2
+
+i <- 3
+dcp2[i, tstart]
+sf_fm_cens <- survfit(fm_cens, newdata = dcp2[i], stype = 2)
+summary(sf_fm_cens)$surv
+summary(sf_fm_cens, times = dcp2[i, tstart])$surv
+
+H0 <- basehaz(fm_cens) |> as.data.table()
+setnames(H0, "hazard", "cumhaz")
+dcp2 <- merge(dcp2, H0, by.x="tstart", by.y="time", all.x=TRUE, sort = FALSE)
+dcp2[, lp := predict(fm_cens, type="lp")]
+dcp2[, P_uncens2 := fifelse(is.na(cumhaz), 1, exp(-cumhaz * exp(lp)))]
+dcp2[]
+
+H0 <- basehaz(fm_cens, centered = FALSE) |> as.data.table()
+setnames(H0, "hazard", "cumhaz")
+dcp2 <- merge(dcp2, H0, by.x="tstart", by.y="time", all.x=TRUE, sort = FALSE)
+dcp2[, lp := predict(fm_cens, type="lp", reference = "zero")]
+dcp2[, P_uncens2 := fifelse(is.na(cumhaz), 1, exp(-cumhaz * exp(lp)))]
+dcp2[]
+
+
+risk <- unname(predict(fm_cens, type="risk", reference = "zero"))
+exp(-H0$hazard[1] * risk[3])
+
+```
+
+<!-- Notes: -->
+
+<!-- - Because the survival curve of subjects with the same value of `z` is the same we didn't need to fit a survival curve for each row of `dcp2`, however, in settings with continuous covariates often subjects will have a unique covariate vector and it will be needed. -->
+<!-- - We used the option `stype = 1` to use a Kaplan-Meier type estimator of survival. The default option (`stype = 2`) exponentiates the cumulative hazard instead and leads to slightly different estimates of `P_uncens` and therefore also different survival estimates. -->
 
 The IP weights are now simply obtained as the inverse of the estimated probability of remaining uncensored:
 ```{r}
+dcp2[, lp := NULL][, cumhaz := NULL][, P_uncens2 := NULL][, P_uncens3 := NULL]
 dcp2[, W := 1 / P_uncens]
 print(dcp2, digits=4)
 ```

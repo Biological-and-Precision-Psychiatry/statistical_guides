@@ -352,7 +352,7 @@ display: none;
 <h1 class="title toc-ignore">Methods to Adjust for Dependent Censoring
 using Inverse Probability of Censoring Weighting</h1>
 <h4 class="author">Rune H B Christensen</h4>
-<h4 class="date">11 October 2025 – version 1.0</h4>
+<h4 class="date">11 October 2025 – version 1.1</h4>
 
 </div>
 
@@ -403,7 +403,6 @@ functional form in censoring model</a></li>
 </ul>
 </div>
 
-<pre><code>## Warning: pakke &#39;data.table&#39; blev bygget under R version 4.5.2</code></pre>
 <p>This note illustrates methods to adjust for censoring on estimation
 of survival using a small data example with just 6 individuals. We first
 illustrate adjusting for censoring assuming that the censoring process
@@ -879,60 +878,143 @@ summary(fm_cens)</code></pre>
 ## Likelihood ratio test= 1.57  on 1 df,   p=0.2
 ## Wald test            = 1.28  on 1 df,   p=0.3
 ## Score (logrank) test = 1.45  on 1 df,   p=0.2</code></pre>
-<p>We loop over each row of the counting process dataset
-<code>dcp2</code> and use <code>survfit</code> to estimate the survival
-curve for each value of <code>z</code>. Then we use the
-<code>summary</code> method for <code>survfit</code> objects to get the
-survival probability for a specific time. Here we want the probability
-of remaining uncensored at the <em>start</em> of each time interval so
-we specify <code>tstart</code> in the <code>times</code>-argument of
+<p>The probability of remaining uncensored corresponds to the survival
+probability estimated in a model for the censoring process. When we
+allow the censoring process to depend on covariates there may be a
+unique covariate setting for each individual, for example each
+individual may have a unique combination of age, bmi etc. We therefore
+have to consider a survival curve for each covariate setting,
+corresponding to each of the individuals in the dataset. Furthermore, we
+have to pick out the point on the survival curve corresponding the time
+at the start of each interval in the dataset because we are interested
+in the probability of being uncensored at the start of each interval.
+That is, each row of the dataset <code>dcp2</code> corresponds to a
+covariate setting represented by <code>z</code> and a time interval
+represented by the start of the interval <code>tstart</code> and the end
+of the interval <code>time</code>.</p>
+<p>Conceptually, the simplest solution is therefore to loop over each
+row of the counting process dataset <code>dcp2</code> and use
+<code>survfit</code> to estimate the survival curve for each value of
+<code>z</code>. Then use the <code>summary</code> method for
+<code>survfit</code> objects to get the survival probability for a
+specific time. Here we want the probability of remaining uncensored at
+the <em>start</em> of each time interval so we specify
+<code>tstart</code> in the <code>times</code>-argument of
 <code>summary</code>. The probabilities are all saved to a variable
 <code>P_uncens</code> in the <code>dcp2</code> dataset:</p>
 <pre class="r"><code>dcp2$P_uncens &lt;- sapply(1:dcp2[, .N], function(i) {
-  sf_fm_cens &lt;- survfit(fm_cens, newdata = dcp2[i], stype = 2)
+  sf_fm_cens &lt;- survfit(fm_cens, newdata = dcp2[i])
   summary(sf_fm_cens, times = dcp2[i, tstart])$surv
 })</code></pre>
-<p>Notes:</p>
-<ul>
-<li>Because the survival curve of subjects with the same value of
-<code>z</code> is the same we didn’t need to fit a survival curve for
-each row of <code>dcp2</code>, however, in settings with continuous
-covariates often subjects will have a unique covariate vector and it
-will be needed.</li>
-<li>We used the option <code>stype = 1</code> to use a Kaplan-Meier type
-estimator of survival. The default option (<code>stype = 2</code>)
-exponentiates the cumulative hazard instead and leads to slightly
-different estimates of <code>P_uncens</code> and therefore also
-different survival estimates.</li>
-</ul>
+<p>While this code is conceptually simple and does what we need, it is
+also unnecessarily computationally intensive because it fits the entire
+survival curve for each subject while we only need one point on the
+survival curve; the point corresponding to <code>tstart</code>.</p>
+<p>Recall that the survival probability at time <span class="math inline">\(t\)</span> for a subject with covariate settings
+<span class="math inline">\(x_i\)</span> can be written: <span class="math display">\[S(t, x_i) = \exp[-H_0(t) \exp(x_i^\top
+\beta)]\]</span> This is essentially also how <code>survfit</code>
+computes survival estimates by default. An argument <code>stype</code>
+can be set to <code>1</code> in <code>survfit</code> to obtain a
+Kaplan-Meier type survival curve instead, or, as the manual for
+<code>survfit</code> says; a ‘direct’ estimation of the survival
+curve.</p>
+<p>We can therefore compute the cumulative baseline hazard <span class="math inline">\(H_0(t)\)</span> (denoted <code>hazard</code>) for
+all time points:</p>
+<pre class="r"><code>H0 &lt;- basehaz(fm_cens, centered = FALSE) |&gt; as.data.table()
+H0</code></pre>
+<pre><code>##       hazard  time
+##        &lt;num&gt; &lt;num&gt;
+## 1:  1.219224    18
+## 2:  1.219224    23
+## 3:  3.390388    27
+## 4:  3.390388    32
+## 5: 13.294270    57
+## 6: 13.294270    64</code></pre>
+<p>and combine it with the linear predictor (<code>lp</code>), <span class="math inline">\(x_i^\top \beta\)</span> computed for each row of
+the dataset:</p>
+<pre class="r"><code>dcp2[, lp := predict(fm_cens, type=&quot;lp&quot;, reference = &quot;zero&quot;)]
+dcp2[, .(tstart, time, id, z, lp)] |&gt; head(3) |&gt; print(digits=5) </code></pre>
+<pre><code>##    tstart  time    id     z      lp
+##     &lt;num&gt; &lt;num&gt; &lt;int&gt; &lt;num&gt;   &lt;num&gt;
+## 1:      0    18     1     1 -1.2702
+## 2:      0    18     2     2 -2.5404
+## 3:     18    23     2     2 -2.5404</code></pre>
+<p>We now merge the cumulative baseline hazard onto <code>dcp2</code>
+while matching on <code>tstart</code> to evaluate the survival
+probability <span class="math inline">\(S(t, x_i)\)</span> for the <span class="math inline">\(i\)</span>th row of the dataset at the time
+<code>tstart</code>:</p>
+<pre class="r"><code>setnames(H0, &quot;hazard&quot;, &quot;cumhaz&quot;)
+dcp2 &lt;- merge(dcp2, H0, by.x=&quot;tstart&quot;, by.y=&quot;time&quot;, all.x=TRUE, sort = FALSE)
+dcp2[, P_uncens2 := fifelse(is.na(cumhaz), 1, exp(-cumhaz * exp(lp)))]
+dcp2[, .(tstart, time, id, z, lp, cumhaz, P_uncens, P_uncens2)] |&gt; 
+  head(5) |&gt; print(digits=5) </code></pre>
+<pre><code>##    tstart  time    id     z      lp cumhaz P_uncens P_uncens2
+##     &lt;num&gt; &lt;num&gt; &lt;int&gt; &lt;num&gt;   &lt;num&gt;  &lt;num&gt;    &lt;num&gt;     &lt;num&gt;
+## 1:      0    18     1     1 -1.2702     NA  1.00000   1.00000
+## 2:      0    18     2     2 -2.5404     NA  1.00000   1.00000
+## 3:     18    23     2     2 -2.5404 1.2192  0.90836   0.90836
+## 4:      0    18     3     1 -1.2702     NA  1.00000   1.00000
+## 5:     18    23     3     1 -1.2702 1.2192  0.71011   0.71011</code></pre>
+<p>Note that we had to handle cases where <code>tstart</code> is
+<code>0</code> separately. These cases lead to <code>NA</code> in
+<code>cumhaz</code> because there is no cumulative baseline hazard for
+time 0, however, by definition everybody is uncensored at time zero so
+the probability of being uncensored at time zero is simply one for
+everybody regardless of covariate settings.</p>
+<p>As a further refinement we can avoid the potentially numerically
+unstable approach of computing both the baseline cumulative hazard and
+the linear predictor using zero as a reference point as follows:</p>
+<pre class="r"><code>H0 &lt;- basehaz(fm_cens) |&gt; as.data.table()
+setnames(H0, &quot;hazard&quot;, &quot;cumhaz&quot;)
+dcp2 &lt;- merge(dcp2[, -&quot;cumhaz&quot;], H0, by.x=&quot;tstart&quot;, by.y=&quot;time&quot;, all.x=TRUE, 
+              sort = FALSE)
+dcp2[, lp := predict(fm_cens, type=&quot;lp&quot;)]
+dcp2[, P_uncens3 := fifelse(is.na(cumhaz), 1, exp(-cumhaz * exp(lp)))]
+dcp2[, .(tstart, time, id, z, lp, cumhaz, P_uncens, P_uncens2, P_uncens3)] |&gt; 
+  head(5) |&gt; print(digits=5) </code></pre>
+<pre><code>##    tstart  time    id     z       lp   cumhaz P_uncens P_uncens2 P_uncens3
+##     &lt;num&gt; &lt;num&gt; &lt;int&gt; &lt;num&gt;    &lt;num&gt;    &lt;num&gt;    &lt;num&gt;     &lt;num&gt;     &lt;num&gt;
+## 1:      0    18     1     1 1.330682       NA  1.00000   1.00000   1.00000
+## 2:      0    18     2     2 0.060486       NA  1.00000   1.00000   1.00000
+## 3:     18    23     2     2 0.060486 0.090477  0.90836   0.90836   0.90836
+## 4:      0    18     3     1 1.330682       NA  1.00000   1.00000   1.00000
+## 5:     18    23     3     1 1.330682 0.090477  0.71011   0.71011   0.71011</code></pre>
+<p>Because applying the approximate mean centered covariates is the
+default in both <code>basehaz</code> and the <code>predict</code>
+method, we simply dropped the arguments to these functions. For further
+details and background, see the note on Cox survival curves available <a href="https://github.com/Biological-and-Precision-Psychiatry/statistical_guides/blob/main/survival_analysis/cox_survival_curve.pdf">here</a>.</p>
+<!-- Notes: -->
+<!-- - Because the survival curve of subjects with the same value of `z` is the same we didn't need to fit a survival curve for each row of `dcp2`, however, in settings with continuous covariates often subjects will have a unique covariate vector and it will be needed. -->
+<!-- - We used the option `stype = 1` to use a Kaplan-Meier type estimator of survival. The default option (`stype = 2`) exponentiates the cumulative hazard instead and leads to slightly different estimates of `P_uncens` and therefore also different survival estimates. -->
 <p>The IP weights are now simply obtained as the inverse of the
 estimated probability of remaining uncensored:</p>
-<pre class="r"><code>dcp2[, W := 1 / P_uncens]
+<pre class="r"><code>dcp2[, lp := NULL][, cumhaz := NULL][, P_uncens2 := NULL][, P_uncens3 := NULL]
+dcp2[, W := 1 / P_uncens]
 print(dcp2, digits=4)</code></pre>
-<pre><code>##        id     z tstart  time event last_time  cens f_time P_uncens     W
-##     &lt;int&gt; &lt;num&gt;  &lt;num&gt; &lt;num&gt; &lt;num&gt;     &lt;num&gt; &lt;num&gt; &lt;fctr&gt;    &lt;num&gt; &lt;num&gt;
-##  1:     1     1      0    18     0         1     1     18   1.0000 1.000
-##  2:     2     2      0    18     0         0     0     18   1.0000 1.000
-##  3:     2     2     18    23     1         1     0     23   0.9084 1.101
-##  4:     3     1      0    18     0         0     0     18   1.0000 1.000
-##  5:     3     1     18    23     0         0     0     23   0.7101 1.408
-##  6:     3     1     23    27     0         1     1     27   0.7101 1.408
-##  7:     4     2      0    18     0         0     0     18   1.0000 1.000
-##  8:     4     2     18    23     0         0     0     23   0.9084 1.101
-##  9:     4     2     23    27     0         0     0     27   0.9084 1.101
-## 10:     4     2     27    32     1         1     0     32   0.7655 1.306
-## 11:     5     3      0    18     0         0     0     18   1.0000 1.000
-## 12:     5     3     18    23     0         0     0     23   0.9734 1.027
-## 13:     5     3     23    27     0         0     0     27   0.9734 1.027
-## 14:     5     3     27    32     0         0     0     32   0.9277 1.078
-## 15:     5     3     32    57     0         1     1     57   0.9277 1.078
-## 16:     6     2      0    18     0         0     0     18   1.0000 1.000
-## 17:     6     2     18    23     0         0     0     23   0.9084 1.101
-## 18:     6     2     23    27     0         0     0     27   0.9084 1.101
-## 19:     6     2     27    32     0         0     0     32   0.7655 1.306
-## 20:     6     2     32    57     0         0     0     57   0.7655 1.306
-## 21:     6     2     57    64     1         1     0     64   0.3506 2.852
-##        id     z tstart  time event last_time  cens f_time P_uncens     W</code></pre>
+<pre><code>##     tstart    id     z  time event last_time  cens f_time P_uncens     W
+##      &lt;num&gt; &lt;int&gt; &lt;num&gt; &lt;num&gt; &lt;num&gt;     &lt;num&gt; &lt;num&gt; &lt;fctr&gt;    &lt;num&gt; &lt;num&gt;
+##  1:      0     1     1    18     0         1     1     18   1.0000 1.000
+##  2:      0     2     2    18     0         0     0     18   1.0000 1.000
+##  3:     18     2     2    23     1         1     0     23   0.9084 1.101
+##  4:      0     3     1    18     0         0     0     18   1.0000 1.000
+##  5:     18     3     1    23     0         0     0     23   0.7101 1.408
+##  6:     23     3     1    27     0         1     1     27   0.7101 1.408
+##  7:      0     4     2    18     0         0     0     18   1.0000 1.000
+##  8:     18     4     2    23     0         0     0     23   0.9084 1.101
+##  9:     23     4     2    27     0         0     0     27   0.9084 1.101
+## 10:     27     4     2    32     1         1     0     32   0.7655 1.306
+## 11:      0     5     3    18     0         0     0     18   1.0000 1.000
+## 12:     18     5     3    23     0         0     0     23   0.9734 1.027
+## 13:     23     5     3    27     0         0     0     27   0.9734 1.027
+## 14:     27     5     3    32     0         0     0     32   0.9277 1.078
+## 15:     32     5     3    57     0         1     1     57   0.9277 1.078
+## 16:      0     6     2    18     0         0     0     18   1.0000 1.000
+## 17:     18     6     2    23     0         0     0     23   0.9084 1.101
+## 18:     23     6     2    27     0         0     0     27   0.9084 1.101
+## 19:     27     6     2    32     0         0     0     32   0.7655 1.306
+## 20:     32     6     2    57     0         0     0     57   0.7655 1.306
+## 21:     57     6     2    64     1         1     0     64   0.3506 2.852
+##     tstart    id     z  time event last_time  cens f_time P_uncens     W</code></pre>
 </div>
 <div id="survival-estimation" class="section level3">
 <h3>Survival estimation</h3>
@@ -1229,17 +1311,16 @@ Cox model.</li>
 <h2>Appendix</h2>
 <p><strong>R</strong> session info:</p>
 <pre class="r"><code>sessionInfo()</code></pre>
-<pre><code>## R version 4.5.0 (2025-04-11 ucrt)
-## Platform: x86_64-w64-mingw32/x64
-## Running under: Windows 11 x64 (build 22631)
+<pre><code>## R version 4.4.2 (2024-10-31)
+## Platform: aarch64-apple-darwin20
+## Running under: macOS Sequoia 15.6.1
 ## 
 ## Matrix products: default
-##   LAPACK version 3.12.1
+## BLAS:   /Library/Frameworks/R.framework/Versions/4.4-arm64/Resources/lib/libRblas.0.dylib 
+## LAPACK: /Library/Frameworks/R.framework/Versions/4.4-arm64/Resources/lib/libRlapack.dylib;  LAPACK version 3.12.0
 ## 
 ## locale:
-## [1] LC_COLLATE=Danish_Denmark.utf8  LC_CTYPE=Danish_Denmark.utf8   
-## [3] LC_MONETARY=Danish_Denmark.utf8 LC_NUMERIC=C                   
-## [5] LC_TIME=Danish_Denmark.utf8    
+## [1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
 ## 
 ## time zone: Europe/Copenhagen
 ## tzcode source: internal
@@ -1248,15 +1329,16 @@ Cox model.</li>
 ## [1] stats     graphics  grDevices utils     datasets  methods   base     
 ## 
 ## other attached packages:
-## [1] survival_3.8-3    data.table_1.17.8
+## [1] survival_3.8-3    data.table_1.16.4
 ## 
 ## loaded via a namespace (and not attached):
-##  [1] digest_0.6.37     R6_2.6.1          fastmap_1.2.0     Matrix_1.7-3     
-##  [5] xfun_0.52         lattice_0.22-6    splines_4.5.0     cachem_1.1.0     
-##  [9] knitr_1.50        htmltools_0.5.8.1 rmarkdown_2.29    lifecycle_1.0.4  
-## [13] cli_3.6.5         grid_4.5.0        sass_0.4.10       jquerylib_0.1.4  
-## [17] compiler_4.5.0    rprojroot_2.0.4   tools_4.5.0       evaluate_1.0.3   
-## [21] bslib_0.9.0       yaml_2.3.10       rlang_1.1.6       jsonlite_2.0.0</code></pre>
+##  [1] digest_0.6.37     R6_2.5.1          fastmap_1.2.0     Matrix_1.7-1     
+##  [5] xfun_0.52         lattice_0.22-6    splines_4.4.2     cachem_1.1.0     
+##  [9] knitr_1.49        htmltools_0.5.8.1 rmarkdown_2.29    lifecycle_1.0.4  
+## [13] cli_3.6.3         grid_4.4.2        sass_0.4.9        jquerylib_0.1.4  
+## [17] compiler_4.4.2    rprojroot_2.0.4   rstudioapi_0.17.1 tools_4.4.2      
+## [21] evaluate_1.0.1    bslib_0.8.0       yaml_2.3.10       rlang_1.1.6      
+## [25] jsonlite_1.8.9</code></pre>
 </div>
 
 
