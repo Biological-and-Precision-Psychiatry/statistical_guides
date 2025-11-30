@@ -11,6 +11,7 @@
 
 <meta name="author" content="Rune H B Christensen" />
 
+<meta name="date" content="2025-11-30" />
 
 <title>Methods to Adjust for Dependent Censoring using Inverse Probability of Censoring Weighting</title>
 
@@ -351,9 +352,9 @@ display: none;
 
 <h1 class="title toc-ignore">Methods to Adjust for Dependent Censoring
 using Inverse Probability of Censoring Weighting</h1>
+<h3 class="subtitle">Version 1.1</h3>
 <h4 class="author">Rune H B Christensen</h4>
-<h4 class="date">Original: 11 October 2025, last edit: 30 November 2025
-– version 1.1</h4>
+<h4 class="date">30 November 2025</h4>
 
 </div>
 
@@ -412,6 +413,10 @@ dependent censoring assuming that the censoring process depends on a
 covariate. In particular we illustrate the method using a Cox model for
 the censoring process or using a logistic regression to model the
 censoring process.</p>
+<p>We will use the following packages for examples in
+<strong>R</strong>:</p>
+<pre class="r"><code>library(data.table)
+library(survival)</code></pre>
 <div id="a-small-data-example" class="section level2">
 <h2>A small data example</h2>
 <p>In this note we consider a small data example with information on the
