@@ -1,7 +1,8 @@
 ---
 title: "Survival Estimation with Proportional Hazards Models"
+subtitle: "Version 1.2"
 author: "Rune H B Christensen"
-date: "26 October 2025 -- version 1.2"
+date: "30 November 2025"
 output:
   pdf_document:
     toc: true
@@ -10,22 +11,6 @@ output:
 editor_options:
   chunk_output_type: console
 ---
-
-
-```{r, message=FALSE, echo=FALSE}
-library(ggplot2)
-library(data.table)
-library(readxl)
-# library(emmeans)
-# library(arsenal) # for 'tableby'
-# library(geepack) # for robust standard errors
-library(survival)
-library(ggfortify) # fortify.survfit
-# library(survminer)
-# 
-# library(parallel)
-# library(foreach)
-```
 
 ```{r setup, echo=FALSE}
 # Set root dir to project root: 
@@ -41,6 +26,14 @@ In the Cox proportional hazard model the baseline hazard is neither specified no
 A sometimes confusing aspect is that the implementation in the **survival** package is based on approximately centering the covariates. For example `help(predict.coxph)` says that "The `coxph` routines try to approximately center the predictors out of self protection." This is because there is a risk of numerical overflow when computing `exp(x)` when `x` is large. The functions `basehaz`, `predict`, and `survfit` all inherit the centered covariates and by default return results for the transformed covariates. 
 
 This note describes when and how the numerical challenges occur, how the Cox methods in the **survival** package deal with it and how the user will have to manoeuvre the options of the software to compute the quantities of interest.
+
+We will use the following packages for examples in **R**:
+```{r, warning=FALSE, message=FALSE}
+library(data.table)
+library(survival)
+library(ggplot2)
+library(ggfortify) # fortify.survfit
+```
 
 Illustrations in **R** use the **data.table** package for data handling and manipulation. Readers unfamiliar with the **data.table** package will hopefully (and probably) find the code easy to read.
 
@@ -425,12 +418,21 @@ str(sfm2, list.len = 7)
 We extract, manipulate and plot the survival probabilities as follows:
 ```{r}
 dsurv <- with(sfm2, cbind(data.table(n, time, n.risk, n.event),
-                          as.data.table(surv)))
-sfm2$cumhaz
-dsurv <- melt(dsurv, measure.vars = as.character(1:2),
+                          as.data.table(exp(-cumhaz))))
+dsurv <- melt(dsurv, measure.vars = paste0("V", 1:2),
               variable.name = "row", value.name = "surv")
-dsurv[, sex := factor(fifelse(row == 1, 1, 0))]
+dsurv[, sex := factor(fifelse(row == "V1", 1, 0))]
 ggplot(dsurv, aes(time, surv, color=sex)) + geom_step()
+```
+
+Note that while `sfm2$surv` should have contained the survival probabilities, a small bug requires us to use `exp(-sfm2$cumhaz)` to obtain the survival probabilities as is further explained in the appendix.
+```{r, echo=FALSE}
+# This is what we expect in the current version of the survival package:
+s1 <- sfm2$surv
+s2 <- exp(-sfm2$cumhaz)
+stopifnot(!isTRUE(all.equal(s1, s2, check.attributes = FALSE)),
+          isTRUE(all.equal(s1[1:7, ], s2[1:7, ], check.attributes = FALSE)))
+# A similar test appears in the appendix
 ```
 
 To illustrate the variation in survival curves in the population, we might want to see the survival curves for each sex and for age values at the 25'th, 50'th and 75'th percentiles of the population values. To do this, we construct the prediction dataset (`newdata`) as follows:
@@ -443,10 +445,10 @@ We obtain the six survival curves, flip the survival curve data to long format a
 ```{r}
 sfm3 <- survfit(fm, newdata = ndata) |> survfit0()
 dsurv <- with(sfm3, cbind(data.table(n, time, n.risk, n.event),
-                          as.data.table(surv)))
-dsurv <- melt(dsurv, measure.vars = as.character(1:ncol(sfm3$surv)),
+                          as.data.table(exp(-cumhaz))))
+dsurv <- melt(dsurv, measure.vars = paste0("V", 1:ncol(sfm3$cumhaz)),
               variable.name = "row", value.name = "surv")
-ndata[, row := factor(1:(.N))]
+ndata[, row := factor(paste0("V", 1:(.N)))]
 dsurv <- merge(dsurv, ndata, by="row", all.x=TRUE)
 dsurv[, `:=`(age = factor(age), sex = factor(sex))]
 print(dsurv, topn = 3)
@@ -529,7 +531,34 @@ ggplot(dsurv3, aes(time, surv, color=adjusted)) + geom_step()
 
 ## Appendix
 
-**R** session info:
+### Buglet in computation of survival probabilities in `survfit`
+
+In the current version of the **survival** package (version `r packageVersion("survival")`) there is a small bug in the computation of survival probabilities, and I have reported it to the package author [here](https://github.com/therneau/survival/issues/326). The issue involves only the computation of the survival probabilities, not the computation of the cumulative hazard (it appears that the survival computation is insufficiently guarded against underflow.) In the main text above we therefore computed the survival by exponentiating the negative of the cumulative hazard. 
+
+The following code shows the difference between the two objects: the built-in `surv` component of the `survfit` object and the exponential of the negative of the cumulative hazard stored as the `cumhaz` component of the `survfit` object:
+```{r}
+ndata <- expand.grid(age = dt[, mean(age)], 
+                     sex = dt[, unique(sex)])
+sfm2 <- survfit(fm, newdata = ndata) |> survfit0()
+(s1 <- sfm2$surv)
+(s2 <- exp(-sfm2$cumhaz))
+```
+
+The two objects appear identical until except for the last two rows, and this is confirmed by the following code:
+```{r}
+all.equal(s1, s2, check.attributes = FALSE)
+all.equal(s1[1:7, ], s2[1:7, ], check.attributes = FALSE)
+```
+
+```{r, echo=FALSE}
+# This is what we expect in the current version of the survival package:
+stopifnot(!isTRUE(all.equal(s1, s2, check.attributes = FALSE)),
+          isTRUE(all.equal(s1[1:7, ], s2[1:7, ], check.attributes = FALSE)))
+```
+
+
+### **R** session info:
+
 ```{r}
 sessionInfo()
 ```
