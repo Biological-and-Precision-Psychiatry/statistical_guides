@@ -1,7 +1,8 @@
 ---
 title: "Methods to Adjust for Dependent Censoring using Inverse Probability of Censoring Weighting"
+subtitle: "Version 1.1"
 author: "Rune H B Christensen"
-date: "11 October 2025 -- version 1.1"
+date: "30 November 2025"
 output:
   pdf_document:
     toc: true
@@ -11,28 +12,19 @@ editor_options:
   chunk_output_type: console
 ---
 
-
-```{r, message=FALSE, warning=FALSE, echo=FALSE}
-# library(ggplot2)
-library(data.table)
-# library(readxl)
-# library(emmeans)
-# library(arsenal) # for 'tableby'
-# library(geepack) # for robust standard errors
-library(survival)
-# library(ggfortify) # fortify.survfit
-# library(survminer)
-# 
-# library(parallel)
-# library(foreach)
-```
-
 ```{r setup, echo=FALSE}
 # Set root dir to project root: 
 knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
 ```
 
 This note illustrates methods to adjust for censoring on estimation of survival using a small data example with just 6 individuals. We first illustrate adjusting for censoring assuming that the censoring process is independent of covariates, next, we illustrate how to adjust for dependent censoring assuming that the censoring process depends on a covariate. In particular we illustrate the method using a Cox model for the censoring process or using a logistic regression to model the censoring process. 
+
+We will use the following packages for examples in **R**:
+```{r}
+library(data.table)
+library(survival)
+```
+
 
 ## A small data example
 
