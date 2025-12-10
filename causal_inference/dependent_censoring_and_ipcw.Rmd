@@ -1,6 +1,6 @@
 ---
 title: "Methods to Adjust for Dependent Censoring using Inverse Probability of Censoring Weighting"
-subtitle: "Version 1.1"
+subtitle: "Version 1.2"
 author: "Rune H B Christensen"
 date: "30 November 2025"
 output:
@@ -8,6 +8,9 @@ output:
     toc: true
   html_document:
     toc: true
+    toc_float:
+      collapsed: true
+      smooth_scroll: false
 editor_options:
   chunk_output_type: console
 ---
@@ -20,7 +23,7 @@ knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
 This note illustrates methods to adjust for censoring on estimation of survival using a small data example with just 6 individuals. We first illustrate adjusting for censoring assuming that the censoring process is independent of covariates, next, we illustrate how to adjust for dependent censoring assuming that the censoring process depends on a covariate. In particular we illustrate the method using a Cox model for the censoring process or using a logistic regression to model the censoring process. 
 
 We will use the following packages for examples in **R**:
-```{r}
+```{r, message=FALSE, warning=FALSE}
 library(data.table)
 library(survival)
 ```
@@ -82,7 +85,7 @@ Note, however, that we added the `nrisk` variable; the number of subjects at ris
 ### Conventional Kaplan-Meier 
 
 The conventional non-parametric hazard and Kaplan-Meier (KM) survival estimator is
-$$\hat S_{km}(t) =  \hat P[T > t]  =  1 - \prod_{i:t_i \leq t} \left(1 - \frac{y_i}{r_i} \right)$$
+$$\hat S_{km}(t) =  \hat P[T > t]  =  \prod_{i:t_i \leq t} \left(1 - \frac{y_i}{r_i} \right)$$
 where
 
 - ${h_{km}}_i = y_i / r_i$ is the KM nonparametric hazard estimate dividing the event indicator $y_i$ with the number at risk $r_i$, and 
@@ -121,7 +124,7 @@ This estimator gives the same survival as the KM estimator and the two estimator
 ### Weighted Kaplan-Meier
 
 The weighted KM estimator
-$$\hat{S}_{wkm}(t) =  1 - \prod_{i:t_i \leq t} \left(1 - \frac{y_i \cdot w_i}{r_i\cdot w_i} \right)$$
+$$\hat{S}_{wkm}(t) =  \prod_{i:t_i \leq t} \left(1 - \frac{y_i \cdot w_i}{r_i\cdot w_i} \right)$$
 trivially multiplies the event indicator, $y_i$ and the number at risk $r_i$ by a weight $w_i$. In this simple case the weights cancel out leading to the same hazard and survival estimator, however, the estimator has more relevance when applied to data in counting process format as we shall see later.
 
 Compute the weighted KM estimator using the inverse probability of remaining uncensored as weights:
