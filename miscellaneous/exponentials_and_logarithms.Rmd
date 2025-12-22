@@ -41,7 +41,7 @@ At baseline, day $t=0$ there is a single infected subject and with the passing o
 Here $2^t$ is said to be an _exponential function_ with _exponent_ $t$ and _base_ $2$, and the number of infected subjects is said to _increase exponentially_.
 The reverse or _inverse function_ is written $t = \log_2(y)$ and called a _logarithmic function_ with base 2. 
 
-## Proporties of exponential and logarithmic functions
+## Properties of exponential and logarithmic functions
 
 A key proporty of exponential and logarithmic functions is their ability to turn multiplication into addition and back again:
 
@@ -83,7 +83,7 @@ ggplot(plotdata, aes(y, value, linetype=`base b:`, color=`base b:`)) +
 
 ## Rate of change
 
-Exponential functions have special proporties when it comes to rates of change and derivaties.
+Exponential functions have special properties when it comes to rates of change and derivaties.
 Considering the infectious disease example from above and suppose we are interested in the rate at which the number of infected subjects increase, that is, the derivative
 $$\frac{\mathrm{d} f}{\mathrm{d} t} (t) = \frac{\mathrm{d} 2^t}{\mathrm{d} t}$$
 
